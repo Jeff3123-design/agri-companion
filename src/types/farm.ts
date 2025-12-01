@@ -30,6 +30,7 @@ export interface YieldPrediction {
     soilHealth: string;
     pestManagement: string;
   };
+  cached?: boolean;
 }
 
 export interface BackendConfig {

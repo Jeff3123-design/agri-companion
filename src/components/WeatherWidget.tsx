@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { CloudSun, Droplets, Wind, MapPin, Loader2 } from "lucide-react";
+import { CloudSun, Droplets, Wind, MapPin, Loader2, WifiOff } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { fetchWeather } from "@/lib/api";
 import { WeatherData } from "@/types/farm";
 import { toast } from "sonner";
 
 export const WeatherWidget = () => {
-  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [weather, setWeather] = useState<WeatherData & { cached?: boolean; cacheAge?: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null);
 
@@ -74,10 +75,16 @@ export const WeatherWidget = () => {
   return (
     <Card className="p-6 bg-gradient-sky border-none shadow-elevated">
       <div className="flex items-start justify-between mb-4">
-        <div>
+        <div className="flex-1">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
             <MapPin className="w-4 h-4" />
             <span>{weather.location}</span>
+            {weather.cached && (
+              <Badge variant="outline" className="ml-2 text-xs">
+                <WifiOff className="w-3 h-3 mr-1" />
+                Cached {weather.cacheAge ? `${Math.round(weather.cacheAge)}h ago` : ''}
+              </Badge>
+            )}
           </div>
           <h3 className="text-3xl font-bold text-foreground">{weather.temperature}°C</h3>
           <p className="text-muted-foreground capitalize">{weather.condition}</p>
