@@ -1,6 +1,7 @@
-import { DayTask } from "@/types/farm";
+import { DayTask, Task } from "@/types/farm";
 
-export const maizeTasks: DayTask[] = [
+// Convert DayTask format to individual Task format
+const dayTasks: DayTask[] = [
   {
     day: 1,
     stage: "Land Preparation",
@@ -152,3 +153,17 @@ export const maizeTasks: DayTask[] = [
     completed: false
   }
 ];
+
+// Convert to individual Task format for new authentication-based system
+export const maizeTasks: Task[] = dayTasks.flatMap((dayTask) =>
+  dayTask.tasks.map((taskStr, index) => ({
+    id: `day${dayTask.day}-task${index}`,
+    day: dayTask.day,
+    title: taskStr,
+    description: `${dayTask.stage} - Day ${dayTask.day}`,
+    stage: dayTask.stage,
+  }))
+);
+
+// Export the original format for backward compatibility
+export const dayTasksData = dayTasks;
