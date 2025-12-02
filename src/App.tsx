@@ -3,12 +3,15 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
 import { Navigation } from "@/components/Navigation";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { useEffect } from "react";
 import { initializeNotifications } from "@/lib/notifications";
+import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
+import Calendar from "./pages/Calendar";
 import PestCheck from "./pages/PestCheck";
 import Weather from "./pages/Weather";
 import Yield from "./pages/Yield";
@@ -30,7 +33,9 @@ const AppContent = () => {
       {showOfflineBanner && <OfflineBanner />}
       <Navigation />
       <Routes>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<Index />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/calendar" element={<Calendar />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/pest-check" element={<PestCheck />} />
         <Route path="/weather" element={<Weather />} />
@@ -44,13 +49,15 @@ const AppContent = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
-    </TooltipProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AppContent />
+        </BrowserRouter>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
