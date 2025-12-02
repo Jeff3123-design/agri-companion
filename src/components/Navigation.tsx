@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Home, Bug, CloudSun, TrendingUp, Settings, Calendar as CalendarIcon } from "lucide-react";
+import { Home, Bug, CloudSun, TrendingUp, Settings, Menu, X, Calendar as CalendarIcon } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const Navigation = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isOpen, setIsOpen] = useState(false); // mobile menu state
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -22,9 +23,7 @@ export const Navigation = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   const navItems = [
     { icon: Home, label: "Dashboard", path: "/dashboard" },
@@ -36,26 +35,99 @@ export const Navigation = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 md:top-0 md:bottom-auto md:border-b md:border-t-0">
+    <nav className="fixed top-0 left-0 right-0 bg-card border-b border-border z-50">
       <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center">
-          <div className="flex justify-around md:justify-center md:gap-6 py-3 flex-1">
-            {navItems.map((item) => (
+        {/* Top Bar */}
+        <div className="flex justify-between items-center py-3">
+
+          {/* Mobile Hamburger */}
+          <button 
+            onClick={() => setIsOpen(true)} 
+            className="md:hidden p-2 rounded-lg hover:bg-muted transition"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex gap-6">
+            {navItems.map((item, i) => (
               <NavLink
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  "flex flex-col md:flex-row items-center gap-1 md:gap-2 px-2 md:px-3 py-2 rounded-lg transition-all",
+                  "flex items-center gap-2 px-3 py-2 rounded-lg transition-all",
                   "text-muted-foreground hover:text-foreground hover:bg-muted"
                 )}
                 activeClassName="text-primary bg-primary/10 font-medium"
               >
-                <item.icon className="w-4 h-4 md:w-5 md:h-5" />
-                <span className="text-xs md:text-sm">{item.label}</span>
+                <item.icon className="w-5 h-5" />
+                <span className="text-sm">{item.label}</span>
               </NavLink>
             ))}
           </div>
-          <div className="hidden md:flex items-center pr-2">
+
+          {/* Desktop Theme Toggle */}
+          <div className="hidden md:flex items-center">
+            <ThemeToggle />
+          </div>
+        </div>
+      </div>
+
+      {/* ---------------------------------------------- */}
+      {/* BACKDROP (blur + dim background) */}
+      {/* ---------------------------------------------- */}
+      <div
+        onClick={() => setIsOpen(false)}
+        className={cn(
+          "fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 md:hidden",
+          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        )}
+      />
+
+      {/* ---------------------------------------------- */}
+      {/* MOBILE SLIDE-IN MENU (LEFT → RIGHT) */}
+      {/* ---------------------------------------------- */}
+      <div
+        className={cn(
+          "fixed top-0 left-0 h-full w-64 bg-card shadow-xl border-r border-border z-50 md:hidden",
+          "transform transition-transform duration-300",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        {/* Close Button */}
+        <div className="flex items-center justify-between py-4 px-4 border-b border-border">
+          <h2 className="text-lg font-semibold">Menu</h2>
+          <button
+            onClick={() => setIsOpen(false)}
+            className="p-2 rounded-lg hover:bg-muted"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Menu Items (animated) */}
+        <div className="flex flex-col gap-2 p-4">
+          {navItems.map((item, i) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              onClick={() => setIsOpen(false)}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 rounded-lg",
+                "text-muted-foreground hover:text-foreground hover:bg-muted",
+                // Animation: slight slide + fade
+                "translate-x-[-10px] opacity-0 animate-slideFadeIn",
+              )}
+              style={{ animationDelay: `${i * 0.07}s` }} // stagger effect
+              activeClassName="text-primary bg-primary/10 font-medium"
+            >
+              <item.icon className="w-5 h-5" />
+              <span className="text-sm">{item.label}</span>
+            </NavLink>
+          ))}
+
+          {/* Theme Toggle */}
+          <div className="mt-4">
             <ThemeToggle />
           </div>
         </div>
