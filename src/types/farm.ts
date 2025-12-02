@@ -1,3 +1,11 @@
+export interface Task {
+  id: string;
+  day: number;
+  title: string;
+  description: string;
+  stage: string;
+}
+
 export interface DayTask {
   day: number;
   stage: string;

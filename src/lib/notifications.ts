@@ -1,5 +1,5 @@
 // Push notification utilities
-import { maizeTasks } from "@/data/maizeTasks";
+import { dayTasksData } from "@/data/maizeTasks";
 
 export interface NotificationPreferences {
   enabled: boolean;
@@ -65,7 +65,7 @@ export const scheduleDailyTaskReminder = (currentDay: number) => {
   const prefs = getNotificationPreferences();
   if (!prefs.enabled || !prefs.dailyTaskReminders) return;
 
-  const task = maizeTasks.find(t => t.day === currentDay);
+  const task = dayTasksData.find(t => t.day === currentDay);
   if (!task) return;
 
   showNotification(`Day ${currentDay}: ${task.stage}`, {
@@ -82,7 +82,7 @@ export const checkGrowthMilestone = (currentDay: number) => {
   const milestones = [1, 10, 30, 60, 80, 95, 120]; // Key growth days
   
   if (milestones.includes(currentDay)) {
-    const task = maizeTasks.find(t => t.day === currentDay);
+    const task = dayTasksData.find(t => t.day === currentDay);
     if (task) {
       showNotification('🌱 Growth Milestone Reached!', {
         body: `Your maize has reached the ${task.stage} stage. Check your tasks for today.`,
