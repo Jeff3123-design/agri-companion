@@ -14,7 +14,101 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      farming_sessions: {
+        Row: {
+          created_at: string | null
+          current_day: number | null
+          id: string
+          start_date: string | null
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          current_day?: number | null
+          id?: string
+          start_date?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          current_day?: number | null
+          id?: string
+          start_date?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          contact_info: string | null
+          created_at: string | null
+          farm_location: string | null
+          farm_size: string | null
+          full_name: string
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          contact_info?: string | null
+          created_at?: string | null
+          farm_location?: string | null
+          farm_size?: string | null
+          full_name: string
+          id: string
+          updated_at?: string | null
+        }
+        Update: {
+          contact_info?: string | null
+          created_at?: string | null
+          farm_location?: string | null
+          farm_size?: string | null
+          full_name?: string
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      task_completions: {
+        Row: {
+          completed_at: string | null
+          day: number
+          id: string
+          session_id: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          day: number
+          id?: string
+          session_id: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          day?: number
+          id?: string
+          session_id?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_completions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "farming_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
