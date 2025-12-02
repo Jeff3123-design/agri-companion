@@ -1,12 +1,7 @@
-import { WeatherData, PestDiseaseResult, YieldPrediction, BackendConfig } from "@/types/farm";
+import { WeatherData, PestDiseaseResult, YieldPrediction } from "@/types/farm";
 import { offlineStorage, isOnline, getCacheAge } from "./offline";
 import { showWeatherAlert } from "./notifications";
-
-// Get backend config from localStorage
-const getBackendConfig = (): BackendConfig => {
-  const config = localStorage.getItem('backendConfig');
-  return config ? JSON.parse(config) : { apiUrl: '', apiKey: '' };
-};
+import { backendConfig } from "@/config/backend";
 
 // Weather API call with offline support
 export const fetchWeather = async (latitude: number, longitude: number): Promise<WeatherData & { cached?: boolean; cacheAge?: number }> => {
@@ -27,9 +22,7 @@ export const fetchWeather = async (latitude: number, longitude: number): Promise
     throw new Error('No cached weather data available offline');
   }
 
-  const config = getBackendConfig();
-  
-  if (!config.apiUrl) {
+  if (!backendConfig.apiUrl) {
     // Return cached if available, even if backend not configured
     if (cached) {
       return { 
@@ -38,15 +31,15 @@ export const fetchWeather = async (latitude: number, longitude: number): Promise
         cacheAge: getCacheAge(cached.timestamp) 
       };
     }
-    throw new Error('Backend URL not configured. Please set it in Settings.');
+    throw new Error('Backend URL not configured. Add credentials to src/config/backend.ts');
   }
 
   try {
-    const response = await fetch(`${config.apiUrl}/weather`, {
+    const response = await fetch(`${backendConfig.apiUrl}/weather`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`
+        ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
       },
       body: JSON.stringify({ latitude, longitude })
     });
@@ -87,20 +80,18 @@ export const analyzePestDisease = async (imageFile: File): Promise<PestDiseaseRe
     throw new Error('Pest analysis requires internet connection. View previous checks in history.');
   }
 
-  const config = getBackendConfig();
-  
-  if (!config.apiUrl) {
-    throw new Error('Backend URL not configured. Please set it in Settings.');
+  if (!backendConfig.apiUrl) {
+    throw new Error('Backend URL not configured. Add credentials to src/config/backend.ts');
   }
 
   const formData = new FormData();
   formData.append('image', imageFile);
 
   try {
-    const response = await fetch(`${config.apiUrl}/pest-disease/analyze`, {
+    const response = await fetch(`${backendConfig.apiUrl}/pest-disease/analyze`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${config.apiKey}`
+        ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
       },
       body: formData
     });
@@ -152,18 +143,16 @@ export const predictYield = async (data: {
     throw new Error('No cached yield predictions available offline');
   }
 
-  const config = getBackendConfig();
-  
-  if (!config.apiUrl) {
-    throw new Error('Backend URL not configured. Please set it in Settings.');
+  if (!backendConfig.apiUrl) {
+    throw new Error('Backend URL not configured. Add credentials to src/config/backend.ts');
   }
 
   try {
-    const response = await fetch(`${config.apiUrl}/yield/predict`, {
+    const response = await fetch(`${backendConfig.apiUrl}/yield/predict`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`
+        ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
       },
       body: JSON.stringify(data)
     });

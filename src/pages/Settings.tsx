@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Save, MapPin, Server, Bell, Plus, Trash2 } from "lucide-react";
+import { MapPin, Bell, Plus, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,22 +11,12 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { CustomReminder } from "@/lib/notifications";
 
 const Settings = () => {
-  const [apiUrl, setApiUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
   const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [newReminder, setNewReminder] = useState({ title: '', day: '', time: '09:00' });
   
   const { preferences, permissionStatus, enableNotifications, updatePreferences } = useNotifications();
 
   useEffect(() => {
-    // Load saved config
-    const saved = localStorage.getItem('backendConfig');
-    if (saved) {
-      const config = JSON.parse(saved);
-      setApiUrl(config.apiUrl || "");
-      setApiKey(config.apiKey || "");
-    }
-
     // Get current location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -42,12 +32,6 @@ const Settings = () => {
       );
     }
   }, []);
-
-  const handleSave = () => {
-    const config = { apiUrl, apiKey };
-    localStorage.setItem('backendConfig', JSON.stringify(config));
-    toast.success("Settings saved successfully!");
-  };
 
   const handleEnableNotifications = async () => {
     const success = await enableNotifications();
@@ -93,54 +77,9 @@ const Settings = () => {
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-foreground mb-2">Settings</h1>
           <p className="text-muted-foreground">
-            Configure your backend connection and app preferences
+            Configure your preferences and notifications
           </p>
         </div>
-
-        {/* Backend Configuration */}
-        <Card className="p-6 mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Server className="w-5 h-5 text-primary" />
-            <h3 className="font-semibold text-lg text-foreground">Backend Configuration</h3>
-          </div>
-          
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="apiUrl">Backend API URL</Label>
-              <Input
-                id="apiUrl"
-                type="url"
-                placeholder="https://your-backend-api.com"
-                value={apiUrl}
-                onChange={(e) => setApiUrl(e.target.value)}
-                className="mt-2"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Enter your Python backend API URL
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="apiKey">API Key (Optional)</Label>
-              <Input
-                id="apiKey"
-                type="password"
-                placeholder="Your API key"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="mt-2"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Authentication key for your backend
-              </p>
-            </div>
-
-            <Button onClick={handleSave} className="w-full">
-              <Save className="w-4 h-4 mr-2" />
-              Save Configuration
-            </Button>
-          </div>
-        </Card>
 
         {/* Location Info */}
         <Card className="p-6 mb-6">
@@ -282,25 +221,6 @@ const Settings = () => {
               </div>
             </div>
           )}
-        </Card>
-
-        {/* API Endpoints Info */}
-        <Card className="p-6 bg-muted/50">
-          <h3 className="font-semibold text-foreground mb-3">Expected Backend Endpoints</h3>
-          <div className="space-y-3 text-sm">
-            <div>
-              <p className="font-medium text-foreground">POST /weather</p>
-              <p className="text-xs text-muted-foreground">Body: {`{ latitude, longitude }`}</p>
-            </div>
-            <div>
-              <p className="font-medium text-foreground">POST /pest-disease/analyze</p>
-              <p className="text-xs text-muted-foreground">Body: FormData with image file</p>
-            </div>
-            <div>
-              <p className="font-medium text-foreground">POST /yield/predict</p>
-              <p className="text-xs text-muted-foreground">Body: {`{ currentDay, weatherConditions, pestStatus }`}</p>
-            </div>
-          </div>
         </Card>
 
         {/* App Info */}
