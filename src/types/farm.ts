@@ -32,8 +32,3 @@ export interface YieldPrediction {
   };
   cached?: boolean;
 }
-
-export interface BackendConfig {
-  apiUrl: string;
-  apiKey: string;
-}
