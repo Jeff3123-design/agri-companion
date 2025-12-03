@@ -12,6 +12,7 @@ import { initializeNotifications } from "@/lib/notifications";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Calendar from "./pages/Calendar";
+import Progress from "./pages/Progress";
 import PestCheck from "./pages/PestCheck";
 import Weather from "./pages/Weather";
 import Yield from "./pages/Yield";
@@ -36,6 +37,7 @@ const AppContent = () => {
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/progress" element={<Progress />} />
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/pest-check" element={<PestCheck />} />
