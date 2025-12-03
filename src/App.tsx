@@ -12,10 +12,12 @@ import { initializeNotifications } from "@/lib/notifications";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Calendar from "./pages/Calendar";
+import Progress from "./pages/Progress";
 import PestCheck from "./pages/PestCheck";
 import Weather from "./pages/Weather";
 import Yield from "./pages/Yield";
 import Settings from "./pages/Settings";
+import Profile from "./pages/Profile";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -35,11 +37,13 @@ const AppContent = () => {
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/progress" element={<Progress />} />
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/pest-check" element={<PestCheck />} />
         <Route path="/weather" element={<Weather />} />
         <Route path="/yield" element={<Yield />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

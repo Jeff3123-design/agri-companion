@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, CheckCircle2, Circle } from "lucide-react";
 import { maizeTasks } from "@/data/maizeTasks";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ExportButton } from "@/components/ExportButton";
 
 interface DayCompletion {
   day: number;
@@ -19,6 +20,7 @@ const Calendar = () => {
   const [userId, setUserId] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [completions, setCompletions] = useState<DayCompletion[]>([]);
+  const [profile, setProfile] = useState<any>(null);
   const { session, loading: sessionLoading } = useFarmingSession(userId);
 
   useEffect(() => {
@@ -28,6 +30,13 @@ const Calendar = () => {
         navigate("/auth");
       } else {
         setUserId(session.user.id);
+        // Fetch profile for export
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .single();
+        if (profileData) setProfile(profileData);
       }
     };
     checkAuth();
@@ -120,15 +129,29 @@ const Calendar = () => {
   return (
     <div className="container mx-auto px-4 py-8 pb-24 md:pt-20">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground mb-2">120-Day Farming Calendar</h1>
-        <p className="text-muted-foreground">
-          Track your progress through the complete maize farming cycle
-        </p>
-        {session && (
-          <Badge variant="outline" className="mt-2">
-            Current Day: {session.current_day}
-          </Badge>
-        )}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">120-Day Farming Calendar</h1>
+            <p className="text-muted-foreground">
+              Track your progress through the complete maize farming cycle
+            </p>
+            {session && (
+              <Badge variant="outline" className="mt-2">
+                Current Day: {session.current_day}
+              </Badge>
+            )}
+          </div>
+          {session && profile && (
+            <ExportButton
+              userName={profile.full_name || "Farmer"}
+              farmLocation={profile.farm_location}
+              farmSize={profile.farm_size}
+              currentDay={session.current_day}
+              completions={completions}
+              startDate={new Date(session.start_date).toLocaleDateString()}
+            />
+          )}
+        </div>
       </div>
 
       <ScrollArea className="h-[calc(100vh-250px)] md:h-[calc(100vh-200px)]">
