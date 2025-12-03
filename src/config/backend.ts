@@ -10,6 +10,6 @@
  */
 
 export const backendConfig = {
-  apiUrl: "", // Add your backend API URL here
+  apiUrl: "http://0.0.0.0:8000", // Add your backend API URL here
   apiKey: "", // Add your API key here (optional)
 };
