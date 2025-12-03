@@ -4,17 +4,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { DayProgress } from "@/components/DayProgress";
 import { TaskList } from "@/components/TaskList";
 import { WeatherWidget } from "@/components/WeatherWidget";
+import { TaskNotes } from "@/components/TaskNotes";
 import { maizeTasks } from "@/data/maizeTasks";
 import { useFarmingSession } from "@/hooks/useFarmingSession";
 import { useTaskCompletions } from "@/hooks/useTaskCompletions";
+import { useEmailNotifications } from "@/hooks/useEmailNotifications";
 import { Button } from "@/components/ui/button";
-import { LogOut, User } from "lucide-react";
+import { LogOut, User, Mail, Loader2 } from "lucide-react";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [session, setSession] = useState<any>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const { sendTaskReminder } = useEmailNotifications();
 
   // Auth check
   useEffect(() => {
@@ -62,6 +66,19 @@ const Dashboard = () => {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate("/auth");
+  };
+
+  const handleSendTaskEmail = async () => {
+    if (!user || !profile) return;
+    setSendingEmail(true);
+    try {
+      await sendTaskReminder(user.email, profile.full_name || "Farmer", {
+        day: currentDay,
+        tasks: todaysTasks.map((t) => t.title),
+      });
+    } finally {
+      setSendingEmail(false);
+    }
   };
 
   if (!user || sessionLoading) {
@@ -132,12 +149,39 @@ const Dashboard = () => {
           <WeatherWidget />
         </div>
 
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Today's Tasks</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSendTaskEmail}
+            disabled={sendingEmail || todaysTasks.length === 0}
+          >
+            {sendingEmail ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+            ) : (
+              <Mail className="h-4 w-4 mr-1" />
+            )}
+            Email Tasks
+          </Button>
+        </div>
+
         <TaskList 
           tasks={todaysTasks}
           completedTasks={completedTasks}
           onToggleTask={(taskId) => toggleTaskCompletion(taskId, user.id)}
           loading={tasksLoading}
         />
+
+        {farmingSession && (
+          <div className="mt-6">
+            <TaskNotes
+              sessionId={farmingSession.id}
+              userId={user.id}
+              currentDay={currentDay}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

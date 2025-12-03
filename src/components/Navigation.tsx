@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Home, Bug, CloudSun, TrendingUp, Settings, Menu, X, Calendar as CalendarIcon, User } from "lucide-react";
+import { Home, Bug, CloudSun, TrendingUp, Settings, Menu, X, Calendar as CalendarIcon, User, BarChart3 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +27,7 @@ export const Navigation = () => {
 
   const navItems = [
     { icon: Home, label: "Dashboard", path: "/dashboard" },
+    { icon: BarChart3, label: "Progress", path: "/progress" },
     { icon: CalendarIcon, label: "Calendar", path: "/calendar" },
     { icon: Bug, label: "Pest Check", path: "/pest-check" },
     { icon: CloudSun, label: "Weather", path: "/weather" },
