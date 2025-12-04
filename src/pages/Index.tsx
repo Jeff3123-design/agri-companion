@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sprout, CalendarDays, CheckCircle, Bell, BarChart3 } from "lucide-react";
+import { Sprout, CalendarDays, CheckCircle, Bell, BarChart3, Bug, TrendingUp } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const Index = () => {
@@ -36,7 +36,7 @@ const Index = () => {
     return null;
   }
 
-  const features = [
+const features = [
     {
       icon: CalendarDays,
       title: "120-Day Farming Cycle",
@@ -56,6 +56,16 @@ const Index = () => {
       icon: BarChart3,
       title: "Progress Tracking",
       description: "Visualize your farming progress with detailed calendars and completion statistics.",
+    },
+    {
+      icon: Bug,
+      title: "Pest & Disease Detection",
+      description: "AI-powered image analysis to identify pests and diseases early, with treatment recommendations.",
+    },
+    {
+      icon: TrendingUp,
+      title: "Yield Prediction",
+      description: "Get accurate yield forecasts based on weather patterns, pest status, and crop progress.",
     },
   ];
 
@@ -113,7 +123,7 @@ const Index = () => {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {features.map((feature, index) => (
             <Card key={index} className="border-border">
               <CardHeader>
