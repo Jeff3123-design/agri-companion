@@ -14,6 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      crop_photos: {
+        Row: {
+          created_at: string
+          day: number
+          description: string | null
+          id: string
+          image_url: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: number
+          description?: string | null
+          id?: string
+          image_url: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: number
+          description?: string | null
+          id?: string
+          image_url?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crop_photos_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "farming_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       farming_sessions: {
         Row: {
           created_at: string | null

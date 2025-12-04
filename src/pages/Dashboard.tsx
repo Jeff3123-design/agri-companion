@@ -5,10 +5,14 @@ import { DayProgress } from "@/components/DayProgress";
 import { TaskList } from "@/components/TaskList";
 import { WeatherWidget } from "@/components/WeatherWidget";
 import { TaskNotes } from "@/components/TaskNotes";
+import { CropPhotoGallery } from "@/components/CropPhotoGallery";
+import { WeatherRecommendations } from "@/components/WeatherRecommendations";
 import { maizeTasks } from "@/data/maizeTasks";
 import { useFarmingSession } from "@/hooks/useFarmingSession";
 import { useTaskCompletions } from "@/hooks/useTaskCompletions";
 import { useEmailNotifications } from "@/hooks/useEmailNotifications";
+import { fetchWeather } from "@/lib/api";
+import { WeatherData } from "@/types/farm";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, Mail, Loader2 } from "lucide-react";
 
@@ -18,7 +22,21 @@ const Dashboard = () => {
   const [profile, setProfile] = useState<any>(null);
   const [session, setSession] = useState<any>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
   const { sendTaskReminder } = useEmailNotifications();
+
+  // Fetch weather data for recommendations
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const data = await fetchWeather(position.coords.latitude, position.coords.longitude);
+          if (data) setWeather(data);
+        },
+        () => console.log("Location access denied")
+      );
+    }
+  }, []);
 
   // Auth check
   useEffect(() => {
@@ -173,11 +191,20 @@ const Dashboard = () => {
           loading={tasksLoading}
         />
 
+        <div className="mt-6">
+          <WeatherRecommendations weather={weather} currentDay={currentDay} />
+        </div>
+
         {farmingSession && (
-          <div className="mt-6">
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
             <TaskNotes
               sessionId={farmingSession.id}
               userId={user.id}
+              currentDay={currentDay}
+            />
+            <CropPhotoGallery
+              userId={user.id}
+              sessionId={farmingSession.id}
               currentDay={currentDay}
             />
           </div>
