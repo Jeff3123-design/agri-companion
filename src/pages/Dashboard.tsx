@@ -6,6 +6,7 @@ import { TaskList } from "@/components/TaskList";
 import { WeatherWidget } from "@/components/WeatherWidget";
 import { TaskNotes } from "@/components/TaskNotes";
 import { CropPhotoGallery } from "@/components/CropPhotoGallery";
+import { CropTimeline } from "@/components/CropTimeline";
 import { WeatherRecommendations } from "@/components/WeatherRecommendations";
 import { maizeTasks } from "@/data/maizeTasks";
 import { useFarmingSession } from "@/hooks/useFarmingSession";
@@ -107,9 +108,17 @@ const Dashboard = () => {
     );
   }
 
-  const currentDay = farmingSession?.current_day || 1;
+const currentDay = farmingSession?.current_day || 1;
+  
+  // Find tasks for current day or the most recent milestone day
+  const milestoneDays = [...new Set(maizeTasks.map(t => t.day))].sort((a, b) => a - b);
+  const currentMilestone = milestoneDays.reduce((prev, curr) => 
+    curr <= currentDay ? curr : prev, milestoneDays[0]
+  );
+  const nextMilestone = milestoneDays.find(d => d > currentDay);
+  
   const todaysTasks = maizeTasks.filter(
-    (task) => task.day === currentDay
+    (task) => task.day === currentMilestone
   );
 
   return (
@@ -167,8 +176,17 @@ const Dashboard = () => {
           <WeatherWidget />
         </div>
 
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Today's Tasks</h2>
+<div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-semibold">
+              {currentDay === currentMilestone ? "Today's Tasks" : `Tasks from Day ${currentMilestone}`}
+            </h2>
+            {currentDay !== currentMilestone && nextMilestone && (
+              <p className="text-sm text-muted-foreground">
+                Next milestone: Day {nextMilestone} ({nextMilestone - currentDay} days away)
+              </p>
+            )}
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -191,23 +209,33 @@ const Dashboard = () => {
           loading={tasksLoading}
         />
 
-        <div className="mt-6">
+<div className="mt-6">
           <WeatherRecommendations weather={weather} currentDay={currentDay} />
         </div>
 
         {farmingSession && (
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <TaskNotes
-              sessionId={farmingSession.id}
-              userId={user.id}
-              currentDay={currentDay}
-            />
-            <CropPhotoGallery
-              userId={user.id}
-              sessionId={farmingSession.id}
-              currentDay={currentDay}
-            />
-          </div>
+          <>
+            <div className="mt-6">
+              <CropTimeline
+                sessionId={farmingSession.id}
+                currentDay={currentDay}
+                startDate={farmingSession.start_date}
+              />
+            </div>
+            
+            <div className="mt-6 grid gap-6 lg:grid-cols-2">
+              <TaskNotes
+                sessionId={farmingSession.id}
+                userId={user.id}
+                currentDay={currentDay}
+              />
+              <CropPhotoGallery
+                userId={user.id}
+                sessionId={farmingSession.id}
+                currentDay={currentDay}
+              />
+            </div>
+          </>
         )}
       </div>
     </div>
