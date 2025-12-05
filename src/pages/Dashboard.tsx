@@ -8,6 +8,8 @@ import { TaskNotes } from "@/components/TaskNotes";
 import { CropPhotoGallery } from "@/components/CropPhotoGallery";
 import { CropTimeline } from "@/components/CropTimeline";
 import { WeatherRecommendations } from "@/components/WeatherRecommendations";
+import { PhotoComparison } from "@/components/PhotoComparison";
+import { WeatherAlerts } from "@/components/WeatherAlerts";
 import { maizeTasks } from "@/data/maizeTasks";
 import { useFarmingSession } from "@/hooks/useFarmingSession";
 import { useTaskCompletions } from "@/hooks/useTaskCompletions";
@@ -173,7 +175,10 @@ const currentDay = farmingSession?.current_day || 1;
 
         <div className="grid gap-6 mb-6">
           <DayProgress currentDay={currentDay} totalDays={120} />
-          <WeatherWidget />
+          <div className="grid gap-6 lg:grid-cols-2">
+            <WeatherWidget />
+            <WeatherAlerts weather={weather} />
+          </div>
         </div>
 
 <div className="flex items-center justify-between mb-4">
@@ -234,6 +239,10 @@ const currentDay = farmingSession?.current_day || 1;
                 sessionId={farmingSession.id}
                 currentDay={currentDay}
               />
+            </div>
+
+            <div className="mt-6">
+              <PhotoComparison sessionId={farmingSession.id} />
             </div>
           </>
         )}
