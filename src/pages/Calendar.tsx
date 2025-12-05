@@ -4,10 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useFarmingSession } from "@/hooks/useFarmingSession";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, Circle } from "lucide-react";
-import { maizeTasks } from "@/data/maizeTasks";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Loader2, CheckCircle2, Circle, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Leaf } from "lucide-react";
+import { maizeTasks, dayTasksData } from "@/data/maizeTasks";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ExportButton } from "@/components/ExportButton";
+import { toast } from "sonner";
 
 interface DayCompletion {
   day: number;
@@ -15,13 +19,24 @@ interface DayCompletion {
   totalCount: number;
 }
 
+interface TaskCompletion {
+  task_id: string;
+  day: number;
+}
+
 const Calendar = () => {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [completions, setCompletions] = useState<DayCompletion[]>([]);
+  const [taskCompletions, setTaskCompletions] = useState<TaskCompletion[]>([]);
   const [profile, setProfile] = useState<any>(null);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
   const { session, loading: sessionLoading } = useFarmingSession(userId);
+
+  const daysPerPage = 30;
+  const totalPages = Math.ceil(120 / daysPerPage);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -30,7 +45,6 @@ const Calendar = () => {
         navigate("/auth");
       } else {
         setUserId(session.user.id);
-        // Fetch profile for export
         const { data: profileData } = await supabase
           .from("profiles")
           .select("*")
@@ -63,6 +77,8 @@ const Calendar = () => {
           .eq("session_id", session.id);
 
         if (error) throw error;
+
+        setTaskCompletions(data || []);
 
         // Group by day and count completions
         const dayMap: Record<number, Set<string>> = {};
@@ -97,25 +113,96 @@ const Calendar = () => {
     fetchCompletions();
   }, [session?.id]);
 
+  const toggleTaskCompletion = async (taskId: string, day: number) => {
+    if (!session?.id || !userId) return;
+
+    const isCompleted = taskCompletions.some(
+      (tc) => tc.task_id === taskId && tc.day === day
+    );
+
+    try {
+      if (isCompleted) {
+        // Remove completion
+        const { error } = await supabase
+          .from("task_completions")
+          .delete()
+          .eq("session_id", session.id)
+          .eq("task_id", taskId)
+          .eq("day", day);
+
+        if (error) throw error;
+
+        setTaskCompletions((prev) =>
+          prev.filter((tc) => !(tc.task_id === taskId && tc.day === day))
+        );
+        toast.success("Task marked as incomplete");
+      } else {
+        // Add completion
+        const { error } = await supabase
+          .from("task_completions")
+          .insert({
+            session_id: session.id,
+            user_id: userId,
+            task_id: taskId,
+            day: day,
+          });
+
+        if (error) throw error;
+
+        setTaskCompletions((prev) => [...prev, { task_id: taskId, day }]);
+        toast.success("Task completed!");
+      }
+
+      // Update completions count
+      setCompletions((prev) =>
+        prev.map((c) => {
+          if (c.day === day) {
+            const newCount = isCompleted
+              ? c.completedCount - 1
+              : c.completedCount + 1;
+            return { ...c, completedCount: newCount };
+          }
+          return c;
+        })
+      );
+    } catch (error) {
+      console.error("Error toggling task:", error);
+      toast.error("Failed to update task");
+    }
+  };
+
   const getStageForDay = (day: number) => {
     const task = maizeTasks.find((t) => t.day === day);
     return task?.stage || "";
   };
 
-  const getCompletionColor = (completed: number, total: number) => {
-    if (total === 0) return "text-muted-foreground";
-    const percentage = (completed / total) * 100;
-    if (percentage === 100) return "text-primary";
-    if (percentage >= 50) return "text-accent";
-    if (percentage > 0) return "text-secondary-foreground";
-    return "text-muted-foreground";
+  const getTasksForDay = (day: number) => {
+    return maizeTasks.filter((task) => task.day === day);
   };
 
-  const getCompletionStatus = (completed: number, total: number) => {
-    if (total === 0) return "No tasks";
-    if (completed === total) return "Complete";
-    if (completed > 0) return `${completed}/${total}`;
-    return "Not started";
+  const isTaskCompleted = (taskId: string, day: number) => {
+    return taskCompletions.some(
+      (tc) => tc.task_id === taskId && tc.day === day
+    );
+  };
+
+  const getCompletionColor = (completed: number, total: number) => {
+    if (total === 0) return "bg-muted";
+    const percentage = (completed / total) * 100;
+    if (percentage === 100) return "bg-primary";
+    if (percentage >= 50) return "bg-accent";
+    if (percentage > 0) return "bg-secondary";
+    return "bg-muted";
+  };
+
+  const getPageDays = () => {
+    const start = currentPage * daysPerPage;
+    return completions.slice(start, start + daysPerPage);
+  };
+
+  const getStageInfo = (day: number) => {
+    const dayTask = dayTasksData.find((dt) => dt.day === day);
+    return dayTask;
   };
 
   if (loading || sessionLoading) {
@@ -126,6 +213,9 @@ const Calendar = () => {
     );
   }
 
+  const selectedDayData = selectedDay ? getStageInfo(selectedDay) : null;
+  const selectedDayTasks = selectedDay ? getTasksForDay(selectedDay) : [];
+
   return (
     <div className="container mx-auto px-4 py-8 pb-24 md:pt-20">
       <div className="mb-6">
@@ -133,7 +223,7 @@ const Calendar = () => {
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">120-Day Farming Calendar</h1>
             <p className="text-muted-foreground">
-              Track your progress through the complete maize farming cycle
+              Click any day to view and manage tasks
             </p>
             {session && (
               <Badge variant="outline" className="mt-2">
@@ -154,80 +244,199 @@ const Calendar = () => {
         </div>
       </div>
 
-      <ScrollArea className="h-[calc(100vh-250px)] md:h-[calc(100vh-200px)]">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {completions.map((dayData) => {
-            const isCurrentDay = session?.current_day === dayData.day;
-            const stage = getStageForDay(dayData.day);
-            const isPastDay = session ? dayData.day < session.current_day : false;
+      {/* Stage Legend */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        {dayTasksData.map((stage) => (
+          <Badge
+            key={stage.day}
+            variant="outline"
+            className="text-xs cursor-pointer hover:bg-primary/10"
+            onClick={() => setSelectedDay(stage.day)}
+          >
+            Day {stage.day}: {stage.stage}
+          </Badge>
+        ))}
+      </div>
 
-            return (
-              <Card
-                key={dayData.day}
-                className={`transition-all hover:shadow-elevated ${
-                  isCurrentDay ? "border-primary border-2" : ""
-                }`}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">Day {dayData.day}</CardTitle>
-                    {dayData.completedCount === dayData.totalCount &&
-                    dayData.totalCount > 0 ? (
-                      <CheckCircle2 className="h-5 w-5 text-primary" />
-                    ) : (
-                      <Circle className="h-5 w-5 text-muted-foreground" />
-                    )}
-                  </div>
-                  {stage && (
-                    <Badge variant="secondary" className="text-xs mt-1">
-                      {stage}
-                    </Badge>
+      {/* Pagination */}
+      <div className="flex items-center justify-between mb-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+          disabled={currentPage === 0}
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Previous
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          Days {currentPage * daysPerPage + 1} - {Math.min((currentPage + 1) * daysPerPage, 120)}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+          disabled={currentPage === totalPages - 1}
+        >
+          Next
+          <ChevronRight className="h-4 w-4 ml-1" />
+        </Button>
+      </div>
+
+      {/* Calendar Grid */}
+      <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-10 gap-2">
+        {getPageDays().map((dayData) => {
+          const isCurrentDay = session?.current_day === dayData.day;
+          const stage = getStageForDay(dayData.day);
+          const hasTasksOnDay = dayData.totalCount > 0;
+
+          return (
+            <button
+              key={dayData.day}
+              onClick={() => setSelectedDay(dayData.day)}
+              className={`
+                relative aspect-square rounded-lg p-2 flex flex-col items-center justify-center
+                transition-all hover:scale-105 hover:shadow-lg cursor-pointer
+                ${getCompletionColor(dayData.completedCount, dayData.totalCount)}
+                ${isCurrentDay ? "ring-2 ring-primary ring-offset-2" : ""}
+                ${hasTasksOnDay ? "border-2 border-primary/30" : "border border-border/50"}
+              `}
+            >
+              <span className={`text-sm font-bold ${dayData.totalCount > 0 && dayData.completedCount === dayData.totalCount ? "text-primary-foreground" : "text-foreground"}`}>
+                {dayData.day}
+              </span>
+              {dayData.totalCount > 0 && (
+                <div className="absolute bottom-1 right-1">
+                  {dayData.completedCount === dayData.totalCount ? (
+                    <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
+                  ) : (
+                    <Circle className="h-3 w-3 text-muted-foreground" />
                   )}
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
+                </div>
+              )}
+              {hasTasksOnDay && (
+                <Leaf className="absolute top-1 right-1 h-3 w-3 text-primary/70" />
+              )}
+              {isCurrentDay && (
+                <div className="absolute -top-1 -left-1 w-2 h-2 bg-primary rounded-full" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Day Detail Dialog */}
+      <Dialog open={selectedDay !== null} onOpenChange={() => setSelectedDay(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5 text-primary" />
+              Day {selectedDay}
+              {selectedDayData && (
+                <Badge variant="secondary" className="ml-2">
+                  {selectedDayData.stage}
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-[60vh]">
+            {selectedDayTasks.length > 0 ? (
+              <div className="space-y-3 pr-4">
+                {selectedDayTasks.map((task) => {
+                  const completed = isTaskCompleted(task.id, selectedDay!);
+                  return (
                     <div
-                      className={`text-sm font-medium ${getCompletionColor(
-                        dayData.completedCount,
-                        dayData.totalCount
-                      )}`}
+                      key={task.id}
+                      className={`
+                        flex items-start gap-3 p-3 rounded-lg border transition-all
+                        ${completed ? "bg-primary/10 border-primary/30" : "bg-card border-border"}
+                      `}
                     >
-                      {getCompletionStatus(
-                        dayData.completedCount,
-                        dayData.totalCount
-                      )}
+                      <Checkbox
+                        id={task.id}
+                        checked={completed}
+                        onCheckedChange={() => toggleTaskCompletion(task.id, selectedDay!)}
+                        className="mt-0.5"
+                      />
+                      <label
+                        htmlFor={task.id}
+                        className={`flex-1 cursor-pointer ${completed ? "line-through text-muted-foreground" : ""}`}
+                      >
+                        <p className="font-medium">{task.title}</p>
+                        <p className="text-sm text-muted-foreground">{task.stage}</p>
+                      </label>
                     </div>
-                    {dayData.totalCount > 0 && (
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all ${
-                            dayData.completedCount === dayData.totalCount
-                              ? "bg-primary"
-                              : "bg-accent"
-                          }`}
-                          style={{
-                            width: `${
-                              (dayData.completedCount / dayData.totalCount) * 100
-                            }%`,
-                          }}
-                        />
-                      </div>
-                    )}
-                    {isCurrentDay && (
-                      <Badge className="text-xs">Today</Badge>
-                    )}
-                    {isPastDay && dayData.completedCount < dayData.totalCount && (
-                      <Badge variant="outline" className="text-xs">
-                        Incomplete
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </ScrollArea>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Leaf className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>No specific tasks for this day</p>
+                <p className="text-sm mt-1">Continue monitoring your crops</p>
+              </div>
+            )}
+          </ScrollArea>
+
+          {selectedDayTasks.length > 0 && (
+            <div className="flex items-center justify-between pt-4 border-t">
+              <span className="text-sm text-muted-foreground">
+                {selectedDayTasks.filter((t) => isTaskCompleted(t.id, selectedDay!)).length} of {selectedDayTasks.length} completed
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  selectedDayTasks.forEach((task) => {
+                    if (!isTaskCompleted(task.id, selectedDay!)) {
+                      toggleTaskCompletion(task.id, selectedDay!);
+                    }
+                  });
+                }}
+                disabled={selectedDayTasks.every((t) => isTaskCompleted(t.id, selectedDay!))}
+              >
+                Mark All Complete
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Stats Summary */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-lg">Progress Summary</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-2xl font-bold text-primary">
+                {completions.filter((c) => c.totalCount > 0 && c.completedCount === c.totalCount).length}
+              </p>
+              <p className="text-xs text-muted-foreground">Days Completed</p>
+            </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-2xl font-bold text-accent">
+                {completions.filter((c) => c.totalCount > 0 && c.completedCount > 0 && c.completedCount < c.totalCount).length}
+              </p>
+              <p className="text-xs text-muted-foreground">In Progress</p>
+            </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-2xl font-bold text-secondary-foreground">
+                {taskCompletions.length}
+              </p>
+              <p className="text-xs text-muted-foreground">Tasks Done</p>
+            </div>
+            <div className="text-center p-4 bg-muted/50 rounded-lg">
+              <p className="text-2xl font-bold text-foreground">
+                {maizeTasks.length}
+              </p>
+              <p className="text-xs text-muted-foreground">Total Tasks</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
