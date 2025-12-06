@@ -1,42 +1,25 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useFarmingSession } from "@/hooks/useFarmingSession";
+import { useGDUSession } from "@/hooks/useGDUSession";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, CheckCircle2, Circle, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Leaf } from "lucide-react";
-import { maizeTasks, dayTasksData } from "@/data/maizeTasks";
+import { Loader2, TrendingUp, Leaf, Calendar as CalendarIcon, Thermometer, Target } from "lucide-react";
+import { GDU_STAGES, getGrowthStage, getNextStage, getTasksForStage, getDaysSincePlanting } from "@/lib/gdu";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ExportButton } from "@/components/ExportButton";
-import { toast } from "sonner";
-
-interface DayCompletion {
-  day: number;
-  completedCount: number;
-  totalCount: number;
-}
-
-interface TaskCompletion {
-  task_id: string;
-  day: number;
-}
+import { Progress } from "@/components/ui/progress";
+import { format } from "date-fns";
 
 const Calendar = () => {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
-  const [completions, setCompletions] = useState<DayCompletion[]>([]);
-  const [taskCompletions, setTaskCompletions] = useState<TaskCompletion[]>([]);
+  const [selectedStage, setSelectedStage] = useState<typeof GDU_STAGES[number] | null>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [currentPage, setCurrentPage] = useState(0);
-  const { session, loading: sessionLoading } = useFarmingSession(userId);
 
-  const daysPerPage = 30;
-  const totalPages = Math.ceil(120 / daysPerPage);
+  const { session, dailyRecords, loading: sessionLoading, hasActiveSession } = useGDUSession(userId);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -51,6 +34,7 @@ const Calendar = () => {
           .eq("id", session.user.id)
           .single();
         if (profileData) setProfile(profileData);
+        setLoading(false);
       }
     };
     checkAuth();
@@ -66,145 +50,6 @@ const Calendar = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  useEffect(() => {
-    const fetchCompletions = async () => {
-      if (!session?.id) return;
-
-      try {
-        const { data, error } = await supabase
-          .from("task_completions")
-          .select("day, task_id")
-          .eq("session_id", session.id);
-
-        if (error) throw error;
-
-        setTaskCompletions(data || []);
-
-        // Group by day and count completions
-        const dayMap: Record<number, Set<string>> = {};
-        data?.forEach((completion) => {
-          if (!dayMap[completion.day]) {
-            dayMap[completion.day] = new Set();
-          }
-          dayMap[completion.day].add(completion.task_id);
-        });
-
-        // Calculate completion stats for each day
-        const completionStats: DayCompletion[] = Array.from({ length: 120 }, (_, i) => {
-          const day = i + 1;
-          const dayTasks = maizeTasks.filter((task) => task.day === day);
-          const completedCount = dayMap[day]?.size || 0;
-
-          return {
-            day,
-            completedCount,
-            totalCount: dayTasks.length,
-          };
-        });
-
-        setCompletions(completionStats);
-      } catch (error: any) {
-        console.error("Error fetching completions:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCompletions();
-  }, [session?.id]);
-
-  const toggleTaskCompletion = async (taskId: string, day: number) => {
-    if (!session?.id || !userId) return;
-
-    const isCompleted = taskCompletions.some(
-      (tc) => tc.task_id === taskId && tc.day === day
-    );
-
-    try {
-      if (isCompleted) {
-        // Remove completion
-        const { error } = await supabase
-          .from("task_completions")
-          .delete()
-          .eq("session_id", session.id)
-          .eq("task_id", taskId)
-          .eq("day", day);
-
-        if (error) throw error;
-
-        setTaskCompletions((prev) =>
-          prev.filter((tc) => !(tc.task_id === taskId && tc.day === day))
-        );
-        toast.success("Task marked as incomplete");
-      } else {
-        // Add completion
-        const { error } = await supabase
-          .from("task_completions")
-          .insert({
-            session_id: session.id,
-            user_id: userId,
-            task_id: taskId,
-            day: day,
-          });
-
-        if (error) throw error;
-
-        setTaskCompletions((prev) => [...prev, { task_id: taskId, day }]);
-        toast.success("Task completed!");
-      }
-
-      // Update completions count
-      setCompletions((prev) =>
-        prev.map((c) => {
-          if (c.day === day) {
-            const newCount = isCompleted
-              ? c.completedCount - 1
-              : c.completedCount + 1;
-            return { ...c, completedCount: newCount };
-          }
-          return c;
-        })
-      );
-    } catch (error) {
-      console.error("Error toggling task:", error);
-      toast.error("Failed to update task");
-    }
-  };
-
-  const getStageForDay = (day: number) => {
-    const task = maizeTasks.find((t) => t.day === day);
-    return task?.stage || "";
-  };
-
-  const getTasksForDay = (day: number) => {
-    return maizeTasks.filter((task) => task.day === day);
-  };
-
-  const isTaskCompleted = (taskId: string, day: number) => {
-    return taskCompletions.some(
-      (tc) => tc.task_id === taskId && tc.day === day
-    );
-  };
-
-  const getCompletionColor = (completed: number, total: number) => {
-    if (total === 0) return "bg-muted";
-    const percentage = (completed / total) * 100;
-    if (percentage === 100) return "bg-primary";
-    if (percentage >= 50) return "bg-accent";
-    if (percentage > 0) return "bg-secondary";
-    return "bg-muted";
-  };
-
-  const getPageDays = () => {
-    const start = currentPage * daysPerPage;
-    return completions.slice(start, start + daysPerPage);
-  };
-
-  const getStageInfo = (day: number) => {
-    const dayTask = dayTasksData.find((dt) => dt.day === day);
-    return dayTask;
-  };
-
   if (loading || sessionLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen pb-20 md:pt-16">
@@ -213,230 +58,243 @@ const Calendar = () => {
     );
   }
 
-  const selectedDayData = selectedDay ? getStageInfo(selectedDay) : null;
-  const selectedDayTasks = selectedDay ? getTasksForDay(selectedDay) : [];
+  if (!hasActiveSession || !session) {
+    return (
+      <div className="container mx-auto px-4 py-8 pb-24 md:pt-20">
+        <div className="text-center py-12">
+          <Leaf className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+          <h2 className="text-2xl font-bold mb-2">No Active Farm Cycle</h2>
+          <p className="text-muted-foreground mb-4">Start a farm cycle to track growth stages</p>
+          <Button onClick={() => navigate("/dashboard")}>
+            Go to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const currentStage = getGrowthStage(Number(session.accumulated_gdu));
+  const nextStage = getNextStage(Number(session.accumulated_gdu));
+  const daysSincePlanting = session.planting_date ? getDaysSincePlanting(session.planting_date) : 0;
+  const totalGdu = Number(session.accumulated_gdu);
+  const gduToNextStage = nextStage ? nextStage.minGdu - totalGdu : 0;
+
+  // Calculate overall progress (VE to R6)
+  const maxGdu = 2450; // R6 maturity
+  const overallProgress = Math.min(100, (totalGdu / maxGdu) * 100);
 
   return (
     <div className="container mx-auto px-4 py-8 pb-24 md:pt-20">
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">120-Day Farming Calendar</h1>
+            <h1 className="text-3xl font-bold text-foreground mb-2">GDU Growth Calendar</h1>
             <p className="text-muted-foreground">
-              Click any day to view and manage tasks
+              Track your maize growth stages based on accumulated GDU
             </p>
-            {session && (
-              <Badge variant="outline" className="mt-2">
-                Current Day: {session.current_day}
-              </Badge>
-            )}
           </div>
-          {session && profile && (
-            <ExportButton
-              userName={profile.full_name || "Farmer"}
-              farmLocation={profile.farm_location}
-              farmSize={profile.farm_size}
-              currentDay={session.current_day}
-              completions={completions}
-              startDate={new Date(session.start_date).toLocaleDateString()}
-            />
+          {session.planting_date && (
+            <Badge variant="outline" className="text-sm">
+              Planted: {format(new Date(session.planting_date), "MMM d, yyyy")}
+            </Badge>
           )}
         </div>
       </div>
 
-      {/* Stage Legend */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        {dayTasksData.map((stage) => (
-          <Badge
-            key={stage.day}
-            variant="outline"
-            className="text-xs cursor-pointer hover:bg-primary/10"
-            onClick={() => setSelectedDay(stage.day)}
-          >
-            Day {stage.day}: {stage.stage}
-          </Badge>
-        ))}
+      {/* Summary Stats */}
+      <div className="grid gap-4 md:grid-cols-4 mb-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <TrendingUp className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Total GDU</p>
+                <p className="text-xl font-bold">{totalGdu.toFixed(1)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-500/10 rounded-lg">
+                <Leaf className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Current Stage</p>
+                <p className="text-xl font-bold">{currentStage.stage}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-500/10 rounded-lg">
+                <CalendarIcon className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Days</p>
+                <p className="text-xl font-bold">{daysSincePlanting}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-500/10 rounded-lg">
+                <Target className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">To Next Stage</p>
+                <p className="text-xl font-bold">{gduToNextStage.toFixed(0)} GDU</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between mb-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-          disabled={currentPage === 0}
-        >
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          Previous
-        </Button>
-        <span className="text-sm text-muted-foreground">
-          Days {currentPage * daysPerPage + 1} - {Math.min((currentPage + 1) * daysPerPage, 120)}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
-          disabled={currentPage === totalPages - 1}
-        >
-          Next
-          <ChevronRight className="h-4 w-4 ml-1" />
-        </Button>
-      </div>
+      {/* Overall Progress */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Overall Growth Progress</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>VE (Emergence)</span>
+              <span>R6 (Maturity)</span>
+            </div>
+            <Progress value={overallProgress} className="h-4" />
+            <p className="text-center text-sm text-muted-foreground">
+              {overallProgress.toFixed(0)}% complete ({totalGdu.toFixed(0)} / {maxGdu} GDU)
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Calendar Grid */}
-      <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-10 gap-2">
-        {getPageDays().map((dayData) => {
-          const isCurrentDay = session?.current_day === dayData.day;
-          const stage = getStageForDay(dayData.day);
-          const hasTasksOnDay = dayData.totalCount > 0;
+      {/* Growth Stages Timeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Growth Stages Timeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {GDU_STAGES.map((stage) => {
+              const isCurrentStage = stage.stage === currentStage.stage;
+              const isPast = totalGdu >= stage.maxGdu;
+              const stageProgress = isPast ? 100 : 
+                isCurrentStage ? ((totalGdu - stage.minGdu) / (stage.maxGdu - stage.minGdu)) * 100 : 0;
 
-          return (
-            <button
-              key={dayData.day}
-              onClick={() => setSelectedDay(dayData.day)}
-              className={`
-                relative aspect-square rounded-lg p-2 flex flex-col items-center justify-center
-                transition-all hover:scale-105 hover:shadow-lg cursor-pointer
-                ${getCompletionColor(dayData.completedCount, dayData.totalCount)}
-                ${isCurrentDay ? "ring-2 ring-primary ring-offset-2" : ""}
-                ${hasTasksOnDay ? "border-2 border-primary/30" : "border border-border/50"}
-              `}
-            >
-              <span className={`text-sm font-bold ${dayData.totalCount > 0 && dayData.completedCount === dayData.totalCount ? "text-primary-foreground" : "text-foreground"}`}>
-                {dayData.day}
-              </span>
-              {dayData.totalCount > 0 && (
-                <div className="absolute bottom-1 right-1">
-                  {dayData.completedCount === dayData.totalCount ? (
-                    <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
-                  ) : (
-                    <Circle className="h-3 w-3 text-muted-foreground" />
+              return (
+                <button
+                  key={stage.stage}
+                  onClick={() => setSelectedStage(stage)}
+                  className={`w-full text-left p-4 rounded-lg border transition-all hover:shadow-md ${
+                    isCurrentStage ? "bg-primary/10 border-primary ring-2 ring-primary/20" : 
+                    isPast ? "bg-muted/50 border-muted" : "bg-background hover:bg-muted/30"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <Badge variant={isCurrentStage ? "default" : isPast ? "secondary" : "outline"}>
+                        {stage.stage}
+                      </Badge>
+                      <span className="font-medium">{stage.name}</span>
+                      {isCurrentStage && (
+                        <Badge variant="outline" className="bg-primary/20 text-primary border-primary">
+                          Current
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      {stage.minGdu} - {stage.maxGdu === 99999 ? "∞" : stage.maxGdu} GDU
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-2">{stage.description}</p>
+                  {(isCurrentStage || isPast) && (
+                    <Progress value={stageProgress} className="h-2" />
                   )}
-                </div>
-              )}
-              {hasTasksOnDay && (
-                <Leaf className="absolute top-1 right-1 h-3 w-3 text-primary/70" />
-              )}
-              {isCurrentDay && (
-                <div className="absolute -top-1 -left-1 w-2 h-2 bg-primary rounded-full" />
-              )}
-            </button>
-          );
-        })}
-      </div>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Day Detail Dialog */}
-      <Dialog open={selectedDay !== null} onOpenChange={() => setSelectedDay(null)}>
+      {/* Temperature History */}
+      {dailyRecords.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Thermometer className="h-5 w-5" />
+              Recent Temperature Records
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {[...dailyRecords].reverse().slice(0, 10).map((record) => (
+                <div key={record.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div>
+                    <p className="font-medium">{format(new Date(record.date), "MMM d, yyyy")}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Max: {record.temp_max}°C / Min: {record.temp_min}°C
+                    </p>
+                  </div>
+                  <Badge variant="secondary">+{Number(record.gdu).toFixed(1)} GDU</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stage Detail Dialog */}
+      <Dialog open={selectedStage !== null} onOpenChange={() => setSelectedStage(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5 text-primary" />
-              Day {selectedDay}
-              {selectedDayData && (
-                <Badge variant="secondary" className="ml-2">
-                  {selectedDayData.stage}
-                </Badge>
-              )}
+              <Leaf className="h-5 w-5 text-primary" />
+              {selectedStage?.name} ({selectedStage?.stage})
             </DialogTitle>
           </DialogHeader>
 
           <ScrollArea className="max-h-[60vh]">
-            {selectedDayTasks.length > 0 ? (
-              <div className="space-y-3 pr-4">
-                {selectedDayTasks.map((task) => {
-                  const completed = isTaskCompleted(task.id, selectedDay!);
-                  return (
-                    <div
-                      key={task.id}
-                      className={`
-                        flex items-start gap-3 p-3 rounded-lg border transition-all
-                        ${completed ? "bg-primary/10 border-primary/30" : "bg-card border-border"}
-                      `}
-                    >
-                      <Checkbox
-                        id={task.id}
-                        checked={completed}
-                        onCheckedChange={() => toggleTaskCompletion(task.id, selectedDay!)}
-                        className="mt-0.5"
-                      />
-                      <label
-                        htmlFor={task.id}
-                        className={`flex-1 cursor-pointer ${completed ? "line-through text-muted-foreground" : ""}`}
-                      >
-                        <p className="font-medium">{task.title}</p>
-                        <p className="text-sm text-muted-foreground">{task.stage}</p>
-                      </label>
-                    </div>
-                  );
-                })}
+            <div className="space-y-4 pr-4">
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">GDU Range</p>
+                <p className="font-medium">
+                  {selectedStage?.minGdu} - {selectedStage?.maxGdu === 99999 ? "∞" : selectedStage?.maxGdu} GDU
+                </p>
               </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Leaf className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>No specific tasks for this day</p>
-                <p className="text-sm mt-1">Continue monitoring your crops</p>
-              </div>
-            )}
-          </ScrollArea>
 
-          {selectedDayTasks.length > 0 && (
-            <div className="flex items-center justify-between pt-4 border-t">
-              <span className="text-sm text-muted-foreground">
-                {selectedDayTasks.filter((t) => isTaskCompleted(t.id, selectedDay!)).length} of {selectedDayTasks.length} completed
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  selectedDayTasks.forEach((task) => {
-                    if (!isTaskCompleted(task.id, selectedDay!)) {
-                      toggleTaskCompletion(task.id, selectedDay!);
-                    }
-                  });
-                }}
-                disabled={selectedDayTasks.every((t) => isTaskCompleted(t.id, selectedDay!))}
-              >
-                Mark All Complete
-              </Button>
+              <div>
+                <p className="font-medium mb-2">{selectedStage?.description}</p>
+              </div>
+
+              {selectedStage && (
+                <div>
+                  <h4 className="font-medium mb-3">Tasks for this stage:</h4>
+                  <ul className="space-y-2">
+                    {getTasksForStage(selectedStage.stage).map((task, index) => (
+                      <li key={index} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                        <div className="h-2 w-2 rounded-full bg-primary mt-2" />
+                        <span className="text-sm">{task}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-          )}
+          </ScrollArea>
         </DialogContent>
       </Dialog>
-
-      {/* Stats Summary */}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="text-lg">Progress Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <p className="text-2xl font-bold text-primary">
-                {completions.filter((c) => c.totalCount > 0 && c.completedCount === c.totalCount).length}
-              </p>
-              <p className="text-xs text-muted-foreground">Days Completed</p>
-            </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <p className="text-2xl font-bold text-accent">
-                {completions.filter((c) => c.totalCount > 0 && c.completedCount > 0 && c.completedCount < c.totalCount).length}
-              </p>
-              <p className="text-xs text-muted-foreground">In Progress</p>
-            </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <p className="text-2xl font-bold text-secondary-foreground">
-                {taskCompletions.length}
-              </p>
-              <p className="text-xs text-muted-foreground">Tasks Done</p>
-            </div>
-            <div className="text-center p-4 bg-muted/50 rounded-lg">
-              <p className="text-2xl font-bold text-foreground">
-                {maizeTasks.length}
-              </p>
-              <p className="text-xs text-muted-foreground">Total Tasks</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };

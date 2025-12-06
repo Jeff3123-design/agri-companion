@@ -17,7 +17,6 @@ import PestCheck from "./pages/PestCheck";
 import Weather from "./pages/Weather";
 import Yield from "./pages/Yield";
 import Settings from "./pages/Settings";
-import Profile from "./pages/Profile";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -43,7 +42,6 @@ const AppContent = () => {
         <Route path="/pest-check" element={<PestCheck />} />
         <Route path="/weather" element={<Weather />} />
         <Route path="/yield" element={<Yield />} />
-        <Route path="/profile" element={<Profile />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

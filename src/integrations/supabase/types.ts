@@ -52,29 +52,82 @@ export type Database = {
           },
         ]
       }
+      daily_gdu: {
+        Row: {
+          created_at: string
+          date: string
+          gdu: number
+          id: string
+          session_id: string
+          source: string | null
+          temp_max: number | null
+          temp_min: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          gdu?: number
+          id?: string
+          session_id: string
+          source?: string | null
+          temp_max?: number | null
+          temp_min?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          gdu?: number
+          id?: string
+          session_id?: string
+          source?: string | null
+          temp_max?: number | null
+          temp_min?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_gdu_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "farming_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       farming_sessions: {
         Row: {
+          accumulated_gdu: number | null
           created_at: string | null
           current_day: number | null
+          current_stage: string | null
           id: string
+          planting_date: string | null
           start_date: string | null
           status: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
+          accumulated_gdu?: number | null
           created_at?: string | null
           current_day?: number | null
+          current_stage?: string | null
           id?: string
+          planting_date?: string | null
           start_date?: string | null
           status?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
+          accumulated_gdu?: number | null
           created_at?: string | null
           current_day?: number | null
+          current_stage?: string | null
           id?: string
+          planting_date?: string | null
           start_date?: string | null
           status?: string | null
           updated_at?: string | null
