@@ -32,7 +32,6 @@ export const Navigation = () => {
     { icon: Bug, label: "Pest Check", path: "/pest-check" },
     { icon: CloudSun, label: "Weather", path: "/weather" },
     { icon: TrendingUp, label: "Yield", path: "/yield" },
-    { icon: User, label: "Profile", path: "/profile" },
     { icon: Settings, label: "Settings", path: "/settings" },
   ];
 
