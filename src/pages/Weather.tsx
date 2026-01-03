@@ -5,11 +5,22 @@ import { fetchWeather } from "@/lib/api";
 import { WeatherData } from "@/types/farm";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { WeatherForecast } from "@/components/WeatherForecast";
+import { useGDUSession } from "@/hooks/useGDUSession";
+import { supabase } from "@/integrations/supabase/client";
 
 const Weather = () => {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lon: number } | null>(null);
+  const [userId, setUserId] = useState<string | undefined>();
+  const { session } = useGDUSession(userId);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id);
+    });
+  }, []);
 
   useEffect(() => {
     getLocation();
@@ -79,16 +90,16 @@ const Weather = () => {
             <CloudSun className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-lg font-semibold text-foreground mb-2">No Weather Data</h3>
             <p className="text-muted-foreground mb-4">
-              Configure your backend API in Settings to view weather information
+              Enable location services to view weather information
             </p>
-            <Button onClick={() => window.location.href = '/settings'}>
-              Go to Settings
+            <Button onClick={getLocation}>
+              Enable Location
             </Button>
           </Card>
         ) : (
-          <>
+          <div className="space-y-6">
             {/* Current Weather */}
-            <Card className="p-8 mb-6 bg-gradient-sky border-none shadow-elevated">
+            <Card className="p-8 bg-gradient-sky border-none shadow-elevated">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3 text-muted-foreground">
                   <MapPin className="w-5 h-5" />
@@ -138,6 +149,15 @@ const Weather = () => {
               </div>
             </Card>
 
+            {/* 7-Day Forecast with GDU */}
+            {location && (
+              <WeatherForecast 
+                latitude={location.lat} 
+                longitude={location.lon}
+                accumulatedGDU={session?.accumulated_gdu || 0}
+              />
+            )}
+
             {/* Farming Advice */}
             <Card className="p-6">
               <h3 className="font-semibold text-lg mb-4 text-foreground flex items-center gap-2">
@@ -172,7 +192,7 @@ const Weather = () => {
                 )}
               </div>
             </Card>
-          </>
+          </div>
         )}
       </div>
     </div>
