@@ -7,18 +7,29 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Thermometer, Leaf, Calendar, TrendingUp, Plus, History, Target } from "lucide-react";
+import { Thermometer, Leaf, Calendar, TrendingUp, Plus, History, Target, CloudSun, Loader2, BarChart3 } from "lucide-react";
 import { GDU_STAGES, getGrowthStage, getNextStage, getStageProgress, getDaysSincePlanting, getTasksForStage } from "@/lib/gdu";
 import { GDUSession, DailyGDURecord } from "@/hooks/useGDUSession";
+import { GDUChart } from "@/components/GDUChart";
 import { format } from "date-fns";
 
 interface GDUDashboardProps {
   session: GDUSession;
   dailyRecords: DailyGDURecord[];
   onAddGDU: (date: Date, tempMax: number, tempMin: number) => Promise<any>;
+  onAutoFetchGDU?: () => Promise<any>;
+  isAutoFetching?: boolean;
+  hasLocation?: boolean;
 }
 
-export const GDUDashboard = ({ session, dailyRecords, onAddGDU }: GDUDashboardProps) => {
+export const GDUDashboard = ({ 
+  session, 
+  dailyRecords, 
+  onAddGDU, 
+  onAutoFetchGDU,
+  isAutoFetching = false,
+  hasLocation = false,
+}: GDUDashboardProps) => {
   const [tempMax, setTempMax] = useState("");
   const [tempMin, setTempMin] = useState("");
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -42,6 +53,10 @@ export const GDUDashboard = ({ session, dailyRecords, onAddGDU }: GDUDashboardPr
   };
 
   const gduToNextStage = nextStage ? nextStage.minGdu - session.accumulated_gdu : 0;
+
+  // Check if today's data is already recorded
+  const today = format(new Date(), "yyyy-MM-dd");
+  const hasTodayData = dailyRecords.some(r => r.date === today);
 
   return (
     <div className="space-y-6">
@@ -107,7 +122,7 @@ export const GDUDashboard = ({ session, dailyRecords, onAddGDU }: GDUDashboardPr
       {/* Growth Stage Progress */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Leaf className="h-5 w-5 text-primary" />
@@ -115,64 +130,83 @@ export const GDUDashboard = ({ session, dailyRecords, onAddGDU }: GDUDashboardPr
               </CardTitle>
               <CardDescription>{currentStage.description}</CardDescription>
             </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Record Temperature
+            <div className="flex gap-2">
+              {/* Auto-fetch from weather API */}
+              {onAutoFetchGDU && hasLocation && (
+                <Button 
+                  variant="outline" 
+                  onClick={onAutoFetchGDU}
+                  disabled={isAutoFetching || hasTodayData}
+                >
+                  {isAutoFetching ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <CloudSun className="h-4 w-4 mr-2" />
+                  )}
+                  {hasTodayData ? "Today Recorded" : "Auto-Fetch Today"}
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Thermometer className="h-5 w-5" />
-                    Record Daily Temperature
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="date">Date</Label>
-                    <Input
-                      id="date"
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      max={format(new Date(), "yyyy-MM-dd")}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="tempMax">Max Temp (°C)</Label>
-                      <Input
-                        id="tempMax"
-                        type="number"
-                        step="0.1"
-                        placeholder="e.g., 28"
-                        value={tempMax}
-                        onChange={(e) => setTempMax(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="tempMin">Min Temp (°C)</Label>
-                      <Input
-                        id="tempMin"
-                        type="number"
-                        step="0.1"
-                        placeholder="e.g., 15"
-                        value={tempMin}
-                        onChange={(e) => setTempMin(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    GDU = ((Max + Min) / 2) - 10°C base temp
-                  </p>
-                  <Button onClick={handleSubmit} className="w-full" disabled={isSubmitting || !tempMax || !tempMin}>
-                    {isSubmitting ? "Recording..." : "Record GDU"}
+              )}
+              
+              {/* Manual entry */}
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Manual Entry
                   </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Thermometer className="h-5 w-5" />
+                      Record Daily Temperature
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="date">Date</Label>
+                      <Input
+                        id="date"
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        max={format(new Date(), "yyyy-MM-dd")}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="tempMax">Max Temp (°C)</Label>
+                        <Input
+                          id="tempMax"
+                          type="number"
+                          step="0.1"
+                          placeholder="e.g., 28"
+                          value={tempMax}
+                          onChange={(e) => setTempMax(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="tempMin">Min Temp (°C)</Label>
+                        <Input
+                          id="tempMin"
+                          type="number"
+                          step="0.1"
+                          placeholder="e.g., 15"
+                          value={tempMin}
+                          onChange={(e) => setTempMin(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      GDU = ((Max + Min) / 2) - 10°C base temp
+                    </p>
+                    <Button onClick={handleSubmit} className="w-full" disabled={isSubmitting || !tempMax || !tempMin}>
+                      {isSubmitting ? "Recording..." : "Record GDU"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -197,6 +231,9 @@ export const GDUDashboard = ({ session, dailyRecords, onAddGDU }: GDUDashboardPr
         </CardContent>
       </Card>
 
+      {/* GDU Chart */}
+      <GDUChart dailyRecords={dailyRecords} accumulatedGdu={session.accumulated_gdu} />
+
       {/* Tabs for Tasks and History */}
       <Tabs defaultValue="tasks">
         <TabsList className="w-full">
@@ -209,7 +246,7 @@ export const GDUDashboard = ({ session, dailyRecords, onAddGDU }: GDUDashboardPr
             GDU History
           </TabsTrigger>
           <TabsTrigger value="stages" className="flex-1">
-            <TrendingUp className="h-4 w-4 mr-2" />
+            <BarChart3 className="h-4 w-4 mr-2" />
             All Stages
           </TabsTrigger>
         </TabsList>
@@ -244,9 +281,17 @@ export const GDUDashboard = ({ session, dailyRecords, onAddGDU }: GDUDashboardPr
                     <div key={record.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                       <div>
                         <p className="font-medium">{format(new Date(record.date), "MMM d, yyyy")}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {record.temp_max}°C / {record.temp_min}°C
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm text-muted-foreground">
+                            {record.temp_max}°C / {record.temp_min}°C
+                          </p>
+                          {record.source === "api" && (
+                            <Badge variant="outline" className="text-xs">
+                              <CloudSun className="h-3 w-3 mr-1" />
+                              Auto
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       <Badge variant="secondary">+{Number(record.gdu).toFixed(1)} GDU</Badge>
                     </div>

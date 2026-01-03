@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { calculateDailyGDU, getGrowthStage, getDaysSincePlanting } from "@/lib/gdu";
+import { calculateDailyGDU, getGrowthStage, getDaysSincePlanting, getNextStage, GDU_STAGES } from "@/lib/gdu";
+import { fetchTodayTemperature, fetchDailyTemperatures } from "@/lib/api";
+import { showNotification, getNotificationPreferences } from "@/lib/notifications";
 
 export interface GDUSession {
   id: string;
@@ -29,6 +31,69 @@ export const useGDUSession = (userId: string | undefined) => {
   const [dailyRecords, setDailyRecords] = useState<DailyGDURecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasActiveSession, setHasActiveSession] = useState(false);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isAutoFetching, setIsAutoFetching] = useState(false);
+  const previousStageRef = useRef<string | null>(null);
+
+  // Get user location on mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.log("Location access denied:", error);
+        }
+      );
+    }
+  }, []);
+
+  const sendGrowthStageNotification = async (stage: typeof GDU_STAGES[number], accumulatedGdu: number) => {
+    const prefs = getNotificationPreferences();
+    const nextStage = getNextStage(accumulatedGdu);
+
+    // Push notification
+    if (prefs.enabled && prefs.growthMilestones) {
+      showNotification(`🌱 Stage ${stage.stage} Reached!`, {
+        body: `Your maize has entered the ${stage.name} stage. ${stage.description}`,
+        tag: `stage-${stage.stage}`,
+      });
+    }
+
+    // Email notification
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .single();
+
+        await supabase.functions.invoke("send-notifications", {
+          body: {
+            type: "growth_stage",
+            email: user.email,
+            userName: profile?.full_name || "Farmer",
+            data: {
+              stage: stage.stage,
+              stageName: stage.name,
+              stageDescription: stage.description,
+              accumulatedGdu: accumulatedGdu,
+              nextStage: nextStage?.stage,
+              nextStageGdu: nextStage?.minGdu,
+            },
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Failed to send email notification:", error);
+    }
+  };
 
   const fetchSession = useCallback(async () => {
     if (!userId) {
@@ -62,6 +127,12 @@ export const useGDUSession = (userId: string | undefined) => {
         // Calculate total accumulated GDU
         const totalGdu = (gduRecords || []).reduce((sum, r) => sum + Number(r.gdu), 0);
         const currentStage = getGrowthStage(totalGdu);
+
+        // Check if stage changed and send notification
+        if (previousStageRef.current && previousStageRef.current !== currentStage.stage) {
+          sendGrowthStageNotification(currentStage, totalGdu);
+        }
+        previousStageRef.current = currentStage.stage;
 
         // Update session with latest values
         if (totalGdu !== Number(existingSession.accumulated_gdu) || 
@@ -131,6 +202,7 @@ export const useGDUSession = (userId: string | undefined) => {
         if (error) throw error;
         setSession(data);
         setHasActiveSession(true);
+        previousStageRef.current = "VE";
         toast.success("Farm cycle started!");
         return data;
       } else {
@@ -151,6 +223,7 @@ export const useGDUSession = (userId: string | undefined) => {
         if (error) throw error;
         setSession(data);
         setHasActiveSession(true);
+        previousStageRef.current = "VE";
         toast.success("Farm cycle started!");
         return data;
       }
@@ -187,23 +260,6 @@ export const useGDUSession = (userId: string | undefined) => {
 
       if (error) throw error;
 
-      // Recalculate totals
-      const newTotal = dailyRecords.reduce((sum, r) => {
-        if (r.date === dateStr) return sum + gdu;
-        return sum + Number(r.gdu);
-      }, 0) + (dailyRecords.some(r => r.date === dateStr) ? 0 : gdu);
-
-      const newStage = getGrowthStage(newTotal);
-
-      // Update session
-      await supabase
-        .from("farming_sessions")
-        .update({
-          accumulated_gdu: newTotal,
-          current_stage: newStage.stage,
-        })
-        .eq("id", session.id);
-
       // Refresh data
       await fetchSession();
       toast.success(`GDU recorded: ${gdu.toFixed(1)} units`);
@@ -212,6 +268,84 @@ export const useGDUSession = (userId: string | undefined) => {
       console.error("Error adding GDU:", error);
       toast.error("Failed to record temperature data");
       return null;
+    }
+  };
+
+  // Auto-fetch today's temperature from weather API
+  const autoFetchTodayGDU = async () => {
+    if (!session?.id || !userId || !location || isAutoFetching) return null;
+
+    setIsAutoFetching(true);
+    try {
+      const tempData = await fetchTodayTemperature(location.lat, location.lng);
+      if (tempData && tempData.tempMax !== null && tempData.tempMin !== null) {
+        // Check if we already have today's data
+        const today = new Date().toISOString().split('T')[0];
+        const existingToday = dailyRecords.find(r => r.date === today);
+        
+        if (!existingToday) {
+          await addDailyGDU(new Date(), tempData.tempMax, tempData.tempMin, "api");
+          toast.success("Today's temperature fetched automatically!");
+          return tempData;
+        } else {
+          toast.info("Today's GDU already recorded");
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error("Error auto-fetching temperature:", error);
+      toast.error("Failed to fetch weather data");
+      return null;
+    } finally {
+      setIsAutoFetching(false);
+    }
+  };
+
+  // Back-fill historical GDU data from weather API
+  const backfillHistoricalGDU = async (startDate: string) => {
+    if (!session?.id || !userId || !location) return;
+
+    setIsAutoFetching(true);
+    try {
+      const endDate = new Date().toISOString().split('T')[0];
+      const tempData = await fetchDailyTemperatures(location.lat, location.lng, startDate, endDate);
+      
+      if (tempData.length === 0) {
+        toast.error("No historical weather data available");
+        return;
+      }
+
+      let addedCount = 0;
+      for (const day of tempData) {
+        if (day.tempMax !== null && day.tempMin !== null) {
+          const gdu = calculateDailyGDU(day.tempMax, day.tempMin);
+          
+          // Check if record already exists
+          const existing = dailyRecords.find(r => r.date === day.date);
+          if (!existing) {
+            await supabase
+              .from("daily_gdu")
+              .insert({
+                session_id: session.id,
+                user_id: userId,
+                date: day.date,
+                temp_max: day.tempMax,
+                temp_min: day.tempMin,
+                gdu: gdu,
+                source: "api",
+              });
+            addedCount++;
+          }
+        }
+      }
+
+      await fetchSession();
+      toast.success(`Added ${addedCount} days of historical GDU data`);
+    } catch (error) {
+      console.error("Error backfilling GDU:", error);
+      toast.error("Failed to fetch historical weather data");
+    } finally {
+      setIsAutoFetching(false);
     }
   };
 
@@ -227,6 +361,7 @@ export const useGDUSession = (userId: string | undefined) => {
       setSession(null);
       setDailyRecords([]);
       setHasActiveSession(false);
+      previousStageRef.current = null;
       toast.success("Farm cycle ended");
     } catch (error: any) {
       console.error("Error ending farm cycle:", error);
@@ -239,8 +374,12 @@ export const useGDUSession = (userId: string | undefined) => {
     dailyRecords,
     loading,
     hasActiveSession,
+    location,
+    isAutoFetching,
     startFarmCycle,
     addDailyGDU,
+    autoFetchTodayGDU,
+    backfillHistoricalGDU,
     endFarmCycle,
     refreshSession: fetchSession,
   };

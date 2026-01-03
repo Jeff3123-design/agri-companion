@@ -106,6 +106,60 @@ export const fetchWeather = async (latitude: number, longitude: number): Promise
   }
 };
 
+// Fetch daily min/max temperatures for GDU calculation
+export interface DailyTemperatureData {
+  date: string;
+  tempMax: number;
+  tempMin: number;
+}
+
+export const fetchDailyTemperatures = async (
+  latitude: number, 
+  longitude: number, 
+  startDate: string, 
+  endDate: string
+): Promise<DailyTemperatureData[]> => {
+  try {
+    const response = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=temperature_2m_max,temperature_2m_min&timezone=auto&start_date=${startDate}&end_date=${endDate}`
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch temperature data');
+    }
+
+    const apiData = await response.json();
+    
+    const results: DailyTemperatureData[] = [];
+    const dates = apiData.daily?.time || [];
+    const maxTemps = apiData.daily?.temperature_2m_max || [];
+    const minTemps = apiData.daily?.temperature_2m_min || [];
+
+    for (let i = 0; i < dates.length; i++) {
+      results.push({
+        date: dates[i],
+        tempMax: maxTemps[i],
+        tempMin: minTemps[i],
+      });
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Error fetching daily temperatures:', error);
+    return [];
+  }
+};
+
+// Fetch today's min/max temperature for GDU
+export const fetchTodayTemperature = async (
+  latitude: number, 
+  longitude: number
+): Promise<DailyTemperatureData | null> => {
+  const today = new Date().toISOString().split('T')[0];
+  const temps = await fetchDailyTemperatures(latitude, longitude, today, today);
+  return temps[0] || null;
+};
+
 // Pest/Disease detection API call with offline caching
 export const analyzePestDisease = async (imageFile: File): Promise<PestDiseaseResult> => {
   if (!isOnline()) {

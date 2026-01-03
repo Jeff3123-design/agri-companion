@@ -76,8 +76,11 @@ const Dashboard = () => {
     dailyRecords, 
     loading: sessionLoading, 
     hasActiveSession,
+    location,
+    isAutoFetching,
     startFarmCycle,
     addDailyGDU,
+    autoFetchTodayGDU,
   } = useGDUSession(user?.id);
 
   const handleSignOut = async () => {
@@ -150,6 +153,9 @@ const Dashboard = () => {
               session={gduSession} 
               dailyRecords={dailyRecords}
               onAddGDU={addDailyGDU}
+              onAutoFetchGDU={autoFetchTodayGDU}
+              isAutoFetching={isAutoFetching}
+              hasLocation={!!location}
             />
 
             {/* Weather Recommendations */}

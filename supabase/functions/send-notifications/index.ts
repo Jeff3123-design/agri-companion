@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 interface NotificationRequest {
-  type: "task_reminder" | "weather_alert";
+  type: "task_reminder" | "weather_alert" | "growth_stage";
   email: string;
   userName: string;
   data: {
@@ -18,6 +18,12 @@ interface NotificationRequest {
     weatherCondition?: string;
     temperature?: number;
     alertMessage?: string;
+    stage?: string;
+    stageName?: string;
+    stageDescription?: string;
+    accumulatedGdu?: number;
+    nextStage?: string;
+    nextStageGdu?: number;
   };
 }
 
@@ -102,6 +108,62 @@ const handler = async (req: Request): Promise<Response> => {
                 <p><strong>Alert:</strong> ${data.alertMessage}</p>
               </div>
               <p>Please take necessary precautions to protect your crops.</p>
+            </div>
+            <div class="footer">
+              <p>MaizeMind - Your Intelligent Farming Companion</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+    } else if (type === "growth_stage") {
+      subject = `🌱 New Growth Stage Reached: ${data.stage} - MaizeMind`;
+      htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #22c55e, #059669); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+            .content { background: #f0fdf4; padding: 20px; border-radius: 0 0 8px 8px; }
+            .stage-box { background: white; padding: 20px; border-radius: 8px; border: 2px solid #22c55e; margin: 16px 0; text-align: center; }
+            .stage-name { font-size: 32px; font-weight: bold; color: #22c55e; margin-bottom: 8px; }
+            .stage-title { font-size: 20px; color: #333; margin-bottom: 4px; }
+            .stage-desc { color: #666; }
+            .stats { display: flex; justify-content: space-around; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
+            .stat { text-align: center; }
+            .stat-value { font-size: 24px; font-weight: bold; color: #22c55e; }
+            .stat-label { font-size: 12px; color: #666; }
+            .next-stage { background: #fef3c7; padding: 12px; border-radius: 6px; margin-top: 16px; }
+            .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🌱 Growth Milestone Achieved!</h1>
+              <p>Your maize has reached a new development stage</p>
+            </div>
+            <div class="content">
+              <p>Congratulations, ${userName}!</p>
+              <div class="stage-box">
+                <div class="stage-name">${data.stage}</div>
+                <div class="stage-title">${data.stageName}</div>
+                <div class="stage-desc">${data.stageDescription}</div>
+                <div class="stats">
+                  <div class="stat">
+                    <div class="stat-value">${data.accumulatedGdu?.toFixed(0)}</div>
+                    <div class="stat-label">Accumulated GDU</div>
+                  </div>
+                </div>
+              </div>
+              ${data.nextStage ? `
+              <div class="next-stage">
+                <strong>Next Stage:</strong> ${data.nextStage} at ${data.nextStageGdu} GDU
+              </div>
+              ` : ''}
+              <p style="margin-top: 16px;">Keep monitoring your crop's progress and check your tasks for this stage!</p>
             </div>
             <div class="footer">
               <p>MaizeMind - Your Intelligent Farming Companion</p>
