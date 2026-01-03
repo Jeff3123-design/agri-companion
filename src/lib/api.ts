@@ -106,6 +106,60 @@ export const fetchWeather = async (latitude: number, longitude: number): Promise
   }
 };
 
+// Fetch 7-day weather forecast with GDU estimates
+export interface ForecastData {
+  date: string;
+  dayName: string;
+  tempMax: number;
+  tempMin: number;
+  weatherCode: number;
+  condition: string;
+  estimatedGDU: number;
+}
+
+export const fetch7DayForecast = async (
+  latitude: number,
+  longitude: number
+): Promise<ForecastData[]> => {
+  try {
+    const response = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=7`
+    );
+
+    if (!response.ok) throw new Error("Failed to fetch forecast");
+
+    const data = await response.json();
+    const days: ForecastData[] = [];
+
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(data.daily.time[i]);
+      const tempMax = data.daily.temperature_2m_max[i];
+      const tempMin = data.daily.temperature_2m_min[i];
+      
+      // Calculate GDU using standard formula
+      const cappedMax = Math.min(tempMax, 30);
+      const cappedMin = Math.max(tempMin, 10);
+      const avgTemp = (cappedMax + cappedMin) / 2;
+      const gdu = Math.max(0, avgTemp - 10);
+
+      days.push({
+        date: data.daily.time[i],
+        dayName: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        tempMax: Math.round(tempMax),
+        tempMin: Math.round(tempMin),
+        weatherCode: data.daily.weather_code[i],
+        condition: getWeatherCondition(data.daily.weather_code[i]),
+        estimatedGDU: Math.round(gdu * 10) / 10,
+      });
+    }
+
+    return days;
+  } catch (error) {
+    console.error("Forecast error:", error);
+    return [];
+  }
+};
+
 // Fetch daily min/max temperatures for GDU calculation
 export interface DailyTemperatureData {
   date: string;
