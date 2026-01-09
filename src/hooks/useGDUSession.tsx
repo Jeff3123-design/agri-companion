@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { calculateDailyGDU, getGrowthStage, getDaysSincePlanting, getNextStage, GDU_STAGES } from "@/lib/gdu";
-import { fetchTodayTemperature, fetchDailyTemperatures } from "@/lib/api";
+import { fetchTodayTemperature, fetchDailyTemperatures, fetchHistoricalTemperatures } from "@/lib/api";
 import { showNotification, getNotificationPreferences } from "@/lib/notifications";
 
 export interface GDUSession {
@@ -307,8 +307,20 @@ export const useGDUSession = (userId: string | undefined) => {
 
     setIsAutoFetching(true);
     try {
-      const endDate = new Date().toISOString().split('T')[0];
-      const tempData = await fetchDailyTemperatures(location.lat, location.lng, startDate, endDate);
+      const today = new Date();
+      // Historical API only goes up to yesterday
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const endDate = yesterday.toISOString().split('T')[0];
+      
+      // Don't try to backfill if start date is today or future
+      if (startDate >= today.toISOString().split('T')[0]) {
+        toast.info("No historical data to backfill yet");
+        setIsAutoFetching(false);
+        return;
+      }
+      
+      const tempData = await fetchHistoricalTemperatures(location.lat, location.lng, startDate, endDate);
       
       if (tempData.length === 0) {
         toast.error("No historical weather data available");
@@ -340,7 +352,11 @@ export const useGDUSession = (userId: string | undefined) => {
       }
 
       await fetchSession();
-      toast.success(`Added ${addedCount} days of historical GDU data`);
+      if (addedCount > 0) {
+        toast.success(`Added ${addedCount} days of historical GDU data`);
+      } else {
+        toast.info("All historical data already recorded");
+      }
     } catch (error) {
       console.error("Error backfilling GDU:", error);
       toast.error("Failed to fetch historical weather data");

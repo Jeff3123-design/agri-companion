@@ -2,3 +2,6 @@ project_id = "ajnescudwzfotstnoqrz"
 
 [functions.send-notifications]
 verify_jwt = false
+
+[functions.analyze-pest]
+verify_jwt = false

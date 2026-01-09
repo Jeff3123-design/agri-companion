@@ -167,7 +167,75 @@ export interface DailyTemperatureData {
   tempMin: number;
 }
 
+// Fetch historical temperatures using Open-Meteo Archive API
+export const fetchHistoricalTemperatures = async (
+  latitude: number,
+  longitude: number,
+  startDate: string,
+  endDate: string
+): Promise<DailyTemperatureData[]> => {
+  try {
+    const response = await fetch(
+      `https://archive-api.open-meteo.com/v1/archive?latitude=${latitude}&longitude=${longitude}&daily=temperature_2m_max,temperature_2m_min&timezone=auto&start_date=${startDate}&end_date=${endDate}`
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch historical temperature data');
+    }
+
+    const apiData = await response.json();
+    
+    const results: DailyTemperatureData[] = [];
+    const dates = apiData.daily?.time || [];
+    const maxTemps = apiData.daily?.temperature_2m_max || [];
+    const minTemps = apiData.daily?.temperature_2m_min || [];
+
+    for (let i = 0; i < dates.length; i++) {
+      if (maxTemps[i] !== null && minTemps[i] !== null) {
+        results.push({
+          date: dates[i],
+          tempMax: maxTemps[i],
+          tempMin: minTemps[i],
+        });
+      }
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Error fetching historical temperatures:', error);
+    return [];
+  }
+};
+
+// Fetch forecast temperatures (for future days)
 export const fetchDailyTemperatures = async (
+  latitude: number, 
+  longitude: number, 
+  startDate: string, 
+  endDate: string
+): Promise<DailyTemperatureData[]> => {
+  const today = new Date().toISOString().split('T')[0];
+  
+  // If requesting historical data (before today), use archive API
+  if (startDate < today) {
+    const historicalEnd = endDate < today ? endDate : today;
+    const historicalData = await fetchHistoricalTemperatures(latitude, longitude, startDate, historicalEnd);
+    
+    // If also need future data, fetch from forecast
+    if (endDate >= today) {
+      const forecastData = await fetchForecastTemperatures(latitude, longitude, today, endDate);
+      return [...historicalData, ...forecastData.filter(d => d.date > historicalEnd)];
+    }
+    
+    return historicalData;
+  }
+  
+  // Future dates - use forecast API
+  return fetchForecastTemperatures(latitude, longitude, startDate, endDate);
+};
+
+// Fetch forecast temperatures
+const fetchForecastTemperatures = async (
   latitude: number, 
   longitude: number, 
   startDate: string, 
@@ -190,28 +258,51 @@ export const fetchDailyTemperatures = async (
     const minTemps = apiData.daily?.temperature_2m_min || [];
 
     for (let i = 0; i < dates.length; i++) {
-      results.push({
-        date: dates[i],
-        tempMax: maxTemps[i],
-        tempMin: minTemps[i],
-      });
+      if (maxTemps[i] !== null && minTemps[i] !== null) {
+        results.push({
+          date: dates[i],
+          tempMax: maxTemps[i],
+          tempMin: minTemps[i],
+        });
+      }
     }
 
     return results;
   } catch (error) {
-    console.error('Error fetching daily temperatures:', error);
+    console.error('Error fetching forecast temperatures:', error);
     return [];
   }
 };
 
-// Fetch today's min/max temperature for GDU
+// Fetch today's min/max temperature for GDU - uses forecast for today's expected temps
 export const fetchTodayTemperature = async (
   latitude: number, 
   longitude: number
 ): Promise<DailyTemperatureData | null> => {
-  const today = new Date().toISOString().split('T')[0];
-  const temps = await fetchDailyTemperatures(latitude, longitude, today, today);
-  return temps[0] || null;
+  try {
+    // Use forecast API for today - gives today's expected max/min
+    const response = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1`
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch today temperature');
+    }
+
+    const apiData = await response.json();
+    
+    if (apiData.daily?.time?.[0]) {
+      return {
+        date: apiData.daily.time[0],
+        tempMax: apiData.daily.temperature_2m_max[0],
+        tempMin: apiData.daily.temperature_2m_min[0],
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching today temperature:', error);
+    return null;
+  }
 };
 
 // Pest/Disease detection API call with offline caching
