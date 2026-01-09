@@ -6,9 +6,11 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { Navigation } from "@/components/Navigation";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { PermissionPrompt } from "@/components/PermissionPrompt";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { useEffect } from "react";
 import { initializeNotifications } from "@/lib/notifications";
+import { offlineStorage } from "@/lib/offline";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Calendar from "./pages/Calendar";
@@ -26,12 +28,17 @@ const AppContent = () => {
   const { showOfflineBanner } = useOfflineSync();
 
   useEffect(() => {
+    // Initialize notifications system
     initializeNotifications();
+    
+    // Initialize offline storage
+    offlineStorage.init().catch(console.error);
   }, []);
 
   return (
     <>
       {showOfflineBanner && <OfflineBanner />}
+      <PermissionPrompt />
       <Navigation />
       <Routes>
         <Route path="/" element={<Index />} />
