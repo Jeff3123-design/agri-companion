@@ -106,13 +106,13 @@ const Dashboard = () => {
   const daysSincePlanting = gduSession?.planting_date ? getDaysSincePlanting(gduSession.planting_date) : 0;
 
   return (
-    <div className="min-h-screen pb-20 bg-gradient-to-b from-background to-primary/5">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen pb-20 pt-20 bg-gradient-to-b from-background to-primary/5">
+      <div className="container mx-auto px-4 py-6">
         <header className="mb-8">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                Welcome back, {profile?.full_name || user.email}!
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent truncate">
+                Welcome, {profile?.full_name || user.email?.split('@')[0]}!
               </h1>
               <p className="text-muted-foreground">
                 GDU-based maize growth tracking

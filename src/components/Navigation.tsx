@@ -128,7 +128,8 @@ export const Navigation = () => {
           ))}
 
           {/* Theme Toggle */}
-          <div className="mt-4">
+          <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Theme</span>
             <ThemeToggle />
           </div>
         </div>
