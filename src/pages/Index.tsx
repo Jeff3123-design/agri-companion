@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sprout, CalendarDays, CheckCircle, Bell, BarChart3, Bug, TrendingUp } from "lucide-react";
+import { Sprout, Thermometer, CheckCircle, Bell, Bug, TrendingUp, CloudSun, Menu } from "lucide-react";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const Index = () => {
@@ -38,9 +39,9 @@ const Index = () => {
 
 const features = [
     {
-      icon: CalendarDays,
-      title: "120-Day Farming Cycle",
-      description: "Track your complete maize farming journey from planting to harvest with daily task guidance.",
+      icon: Thermometer,
+      title: "GDU-Based Growth Tracking",
+      description: "Track your maize growth using Growing Degree Units (GDU) for precise, temperature-based stage monitoring.",
     },
     {
       icon: CheckCircle,
@@ -53,9 +54,9 @@ const features = [
       description: "Get timely notifications for important tasks like watering, fertilizing, and pest control.",
     },
     {
-      icon: BarChart3,
-      title: "Progress Tracking",
-      description: "Visualize your farming progress with detailed calendars and completion statistics.",
+      icon: CloudSun,
+      title: "7-Day Weather Forecast",
+      description: "Stay ahead with accurate 7-day weather forecasts and daily GDU predictions for your location.",
     },
     {
       icon: Bug,
@@ -81,13 +82,38 @@ const features = [
             <span className="text-xl font-bold text-foreground">Farm Buddy AI</span>
           </div>
           <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <Button onClick={() => navigate("/auth")} variant="outline">
+            {/* Desktop: Show theme toggle */}
+            <div className="hidden sm:block">
+              <ThemeToggle />
+            </div>
+            <Button onClick={() => navigate("/auth")} variant="outline" className="hidden sm:inline-flex">
               Sign In
             </Button>
             <Button onClick={() => navigate("/auth")} className="hidden sm:inline-flex">
               Get Started
             </Button>
+            {/* Mobile: Hamburger menu with theme toggle */}
+            <Sheet>
+              <SheetTrigger asChild className="sm:hidden">
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-6 w-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-64">
+                <div className="flex flex-col gap-4 mt-6">
+                  <div className="flex items-center justify-between px-2">
+                    <span className="text-sm text-muted-foreground">Theme</span>
+                    <ThemeToggle />
+                  </div>
+                  <Button onClick={() => navigate("/auth")} variant="outline" className="w-full">
+                    Sign In
+                  </Button>
+                  <Button onClick={() => navigate("/auth")} className="w-full">
+                    Get Started
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </header>
@@ -99,7 +125,7 @@ const features = [
             Your AI-Powered Farming Companion
           </h1>
           <p className="text-xl text-muted-foreground mb-8">
-            Master maize farming with daily task guidance, smart reminders, and progress tracking throughout your 120-day growing cycle.
+            Master maize farming with GDU-based growth tracking, smart reminders, and real-time weather insights for optimal yields.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" onClick={() => navigate("/auth")} className="text-lg">
@@ -165,7 +191,7 @@ const features = [
       {/* Footer */}
       <footer className="border-t border-border py-8">
         <div className="container mx-auto px-4 text-center text-muted-foreground">
-          <p>&copy; 2024 Farm Buddy AI. Empowering farmers with technology.</p>
+          <p>&copy; 2026 Farm Buddy AI. Empowering farmers with technology.</p>
         </div>
       </footer>
     </div>
