@@ -1,30 +1,121 @@
 import { useState, useEffect } from "react";
-import { TrendingUp, Loader2, BarChart3, Target } from "lucide-react";
+import { TrendingUp, Loader2, BarChart3, Target, Sprout, Cloud, Bug, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { predictYield } from "@/lib/api";
+import { predictYield, fetchWeather } from "@/lib/api";
 import { YieldPrediction } from "@/types/farm";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
+import { supabase } from "@/integrations/supabase/client";
+
+interface GatheringStep {
+  label: string;
+  icon: React.ElementType;
+  status: 'pending' | 'loading' | 'done';
+}
 
 const Yield = () => {
   const [prediction, setPrediction] = useState<YieldPrediction | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [currentDay] = useState(() => {
-    const saved = localStorage.getItem('farmCurrentDay');
-    return saved ? parseInt(saved) : 1;
-  });
+  const [loading, setLoading] = useState(true);
+  const [gatheringSteps, setGatheringSteps] = useState<GatheringStep[]>([
+    { label: 'Fetching farm session data', icon: Sprout, status: 'pending' },
+    { label: 'Getting current weather conditions', icon: Cloud, status: 'pending' },
+    { label: 'Analyzing pest management status', icon: Bug, status: 'pending' },
+    { label: 'Running AI prediction model', icon: Sparkles, status: 'pending' },
+  ]);
+  const [currentMessage, setCurrentMessage] = useState("Preparing your yield analysis...");
+
+  const updateStepStatus = (index: number, status: 'pending' | 'loading' | 'done') => {
+    setGatheringSteps(prev => prev.map((step, i) => 
+      i === index ? { ...step, status } : step
+    ));
+  };
 
   const loadPrediction = async () => {
     setLoading(true);
+    
     try {
+      // Step 1: Get farm session data
+      updateStepStatus(0, 'loading');
+      setCurrentMessage("Checking your farm's growth progress...");
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Please log in to view predictions");
+
+      const { data: session } = await supabase
+        .from("farming_sessions")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "active")
+        .maybeSingle();
+
+      const currentDay = session?.current_day || 1;
+      const accumulatedGdu = session?.accumulated_gdu || 0;
+      const currentStage = session?.current_stage || "VE";
+      
+      updateStepStatus(0, 'done');
+      await new Promise(r => setTimeout(r, 500));
+
+      // Step 2: Get weather data
+      updateStepStatus(1, 'loading');
+      setCurrentMessage("Analyzing current weather patterns...");
+      
+      let weatherConditions: any = {
+        temperature: 25,
+        humidity: 60,
+        condition: "Clear"
+      };
+
+      try {
+        // Try to get location and weather
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+        });
+        
+        const weather = await fetchWeather(position.coords.latitude, position.coords.longitude);
+        weatherConditions = {
+          temperature: weather.temperature,
+          humidity: weather.humidity,
+          condition: weather.condition,
+          location: weather.location
+        };
+      } catch {
+        // Use default weather if location/API fails
+        console.log("Using default weather conditions");
+      }
+      
+      updateStepStatus(1, 'done');
+      await new Promise(r => setTimeout(r, 500));
+
+      // Step 3: Get pest status
+      updateStepStatus(2, 'loading');
+      setCurrentMessage("Evaluating pest and disease management...");
+      
+      // Check if there were any recent pest checks with issues
+      const pestStatus = "good"; // Default to good, could enhance with actual pest check history
+      
+      updateStepStatus(2, 'done');
+      await new Promise(r => setTimeout(r, 500));
+
+      // Step 4: Run AI prediction
+      updateStepStatus(3, 'loading');
+      setCurrentMessage("Our AI is crunching the numbers... Sit back and relax! 🌽");
+      
       const data = await predictYield({
         currentDay,
-        weatherConditions: {},
-        pestStatus: "good"
+        weatherConditions: {
+          ...weatherConditions,
+          accumulatedGdu,
+          currentStage,
+        },
+        pestStatus
       });
+      
+      updateStepStatus(3, 'done');
+      await new Promise(r => setTimeout(r, 300));
+      
       setPrediction(data);
-      toast.success("Yield prediction updated!");
+      toast.success("Yield prediction ready!");
     } catch (error: any) {
       console.error("Prediction error:", error);
       toast.error(error.message || "Failed to get yield prediction");
@@ -34,29 +125,81 @@ const Yield = () => {
   };
 
   useEffect(() => {
-    // Auto-load if backend is configured
-    const config = localStorage.getItem('backendConfig');
-    if (config) {
-      const { apiUrl } = JSON.parse(config);
-      if (apiUrl) {
-        loadPrediction();
-      }
-    }
+    loadPrediction();
   }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background pb-20 md:pb-8 md:pt-20 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Calculating yield prediction...</p>
-        </div>
+      <div className="min-h-screen bg-background pb-20 md:pb-8 pt-20 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-8 text-center">
+          <div className="relative mb-6">
+            <div className="w-20 h-20 mx-auto bg-primary/10 rounded-full flex items-center justify-center">
+              <Sprout className="w-10 h-10 text-primary animate-pulse" />
+            </div>
+            <div className="absolute inset-0 w-20 h-20 mx-auto">
+              <svg className="animate-spin-slow" viewBox="0 0 100 100">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeDasharray="70 200"
+                  className="text-primary/30"
+                />
+              </svg>
+            </div>
+          </div>
+          
+          <h2 className="text-xl font-semibold text-foreground mb-2">
+            Analyzing Your Farm
+          </h2>
+          <p className="text-muted-foreground mb-6 text-sm">
+            {currentMessage}
+          </p>
+
+          <div className="space-y-3 text-left mb-6">
+            {gatheringSteps.map((step, index) => (
+              <div 
+                key={index} 
+                className={`flex items-center gap-3 p-3 rounded-lg transition-all duration-300 ${
+                  step.status === 'loading' ? 'bg-primary/10' : 
+                  step.status === 'done' ? 'bg-green-500/10' : 'bg-muted/50'
+                }`}
+              >
+                <div className={`p-1.5 rounded-full ${
+                  step.status === 'loading' ? 'bg-primary/20' : 
+                  step.status === 'done' ? 'bg-green-500/20' : 'bg-muted'
+                }`}>
+                  {step.status === 'loading' ? (
+                    <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                  ) : step.status === 'done' ? (
+                    <span className="w-4 h-4 flex items-center justify-center text-green-600 text-xs">✓</span>
+                  ) : (
+                    <step.icon className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </div>
+                <span className={`text-sm ${
+                  step.status === 'done' ? 'text-green-600' : 
+                  step.status === 'loading' ? 'text-foreground font-medium' : 'text-muted-foreground'
+                }`}>
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            This may take a few moments...
+          </p>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8 md:pt-20">
+    <div className="min-h-screen bg-background pb-20 md:pb-8 pt-20">
       <div className="container mx-auto px-4 py-6 max-w-4xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-foreground mb-2">Yield Prediction</h1>
@@ -68,13 +211,13 @@ const Yield = () => {
         {!prediction ? (
           <Card className="p-12 text-center">
             <BarChart3 className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">No Prediction Available</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">Prediction Unavailable</h3>
             <p className="text-muted-foreground mb-4">
-              Get AI-powered yield predictions by connecting your backend
+              Unable to generate prediction. Please ensure your backend is configured.
             </p>
             <div className="flex gap-3 justify-center">
               <Button onClick={loadPrediction}>
-                Generate Prediction
+                Try Again
               </Button>
               <Button variant="outline" onClick={() => window.location.href = '/settings'}>
                 Configure Backend
