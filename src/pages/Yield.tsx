@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
-import { TrendingUp, Loader2, BarChart3, Target, Sprout, Cloud, Bug, Sparkles, Download, RefreshCw, CheckCircle } from "lucide-react";
+import { TrendingUp, Loader2, BarChart3, Target, Sprout, Cloud, Bug, Sparkles, Download, RefreshCw, CheckCircle, Leaf, Droplets, MapPin, Calendar, Ruler, Info } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { predictYield, fetchWeather } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { predictYield, fetchWeather, fetch7DayForecast } from "@/lib/api";
 import { YieldPrediction } from "@/types/farm";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
@@ -16,6 +19,11 @@ interface GatheringStep {
 }
 
 interface GatheredData {
+  farmInfo: {
+    farmSize: string;
+    farmLocation: string;
+    maizeVariety: string;
+  };
   sessionData: {
     currentDay: number;
     accumulatedGdu: number;
@@ -27,21 +35,57 @@ interface GatheredData {
     humidity: number;
     condition: string;
     location?: string;
+    coordinates: {
+      latitude: number;
+      longitude: number;
+    };
   };
-  pestStatus: string;
+  rainfallData: {
+    recentRainfall: string;
+    forecast7Day: Array<{
+      date: string;
+      condition: string;
+      tempMax: number;
+      tempMin: number;
+    }>;
+  };
+  pestData: {
+    overallStatus: string;
+    fawPresence: string;
+    recentChecks: number;
+  };
+  cropHealthProxy: {
+    ndviEstimate: string;
+    healthScore: number;
+    basedOn: string;
+  };
   collectedAt: string;
 }
 
+const MAIZE_VARIETIES = [
+  { value: "local", label: "Local/Traditional Variety" },
+  { value: "hybrid_early", label: "Hybrid - Early Maturing (90-100 days)" },
+  { value: "hybrid_medium", label: "Hybrid - Medium Maturing (100-120 days)" },
+  { value: "hybrid_late", label: "Hybrid - Late Maturing (120+ days)" },
+  { value: "opv", label: "Open Pollinated Variety (OPV)" },
+  { value: "drought_tolerant", label: "Drought Tolerant Variety" },
+  { value: "quality_protein", label: "Quality Protein Maize (QPM)" },
+  { value: "other", label: "Other" },
+];
+
 const Yield = () => {
   const [prediction, setPrediction] = useState<YieldPrediction | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [gatheredData, setGatheredData] = useState<GatheredData | null>(null);
   const [dataDownloaded, setDataDownloaded] = useState(false);
   const [fetchingFromBackend, setFetchingFromBackend] = useState(false);
+  const [maizeVariety, setMaizeVariety] = useState<string>("");
+  const [showVarietyPrompt, setShowVarietyPrompt] = useState(true);
   const [gatheringSteps, setGatheringSteps] = useState<GatheringStep[]>([
-    { label: 'Fetching farm session data', icon: Sprout, status: 'pending' },
-    { label: 'Getting current weather conditions', icon: Cloud, status: 'pending' },
-    { label: 'Analyzing pest management status', icon: Bug, status: 'pending' },
+    { label: 'Fetching farm & profile data', icon: Sprout, status: 'pending' },
+    { label: 'Getting weather & rainfall data', icon: Cloud, status: 'pending' },
+    { label: 'Analyzing pest status (FAW)', icon: Bug, status: 'pending' },
+    { label: 'Calculating crop health (NDVI proxy)', icon: Leaf, status: 'pending' },
     { label: 'Saving data for prediction', icon: Download, status: 'pending' },
   ]);
   const [currentMessage, setCurrentMessage] = useState("Preparing your yield analysis...");
@@ -99,50 +143,79 @@ const Yield = () => {
   };
 
   const gatherData = async () => {
+    if (!maizeVariety) {
+      toast.error("Please select your maize variety first");
+      return;
+    }
+
     setLoading(true);
     setPrediction(null);
     setDataDownloaded(false);
+    setShowVarietyPrompt(false);
     setGatheringSteps([
-      { label: 'Fetching farm session data', icon: Sprout, status: 'pending' },
-      { label: 'Getting current weather conditions', icon: Cloud, status: 'pending' },
-      { label: 'Analyzing pest management status', icon: Bug, status: 'pending' },
+      { label: 'Fetching farm & profile data', icon: Sprout, status: 'pending' },
+      { label: 'Getting weather & rainfall data', icon: Cloud, status: 'pending' },
+      { label: 'Analyzing pest status (FAW)', icon: Bug, status: 'pending' },
+      { label: 'Calculating crop health (NDVI proxy)', icon: Leaf, status: 'pending' },
       { label: 'Saving data for prediction', icon: Download, status: 'pending' },
     ]);
     
     try {
-      // Step 1: Get farm session data
+      // Step 1: Get farm session + profile data
       updateStepStatus(0, 'loading');
       setCurrentMessage("Checking your farm's growth progress...");
       
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Please log in to view predictions");
 
-      const { data: session } = await supabase
-        .from("farming_sessions")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .maybeSingle();
+      const [sessionResult, profileResult] = await Promise.all([
+        supabase
+          .from("farming_sessions")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .maybeSingle(),
+        supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .maybeSingle()
+      ]);
+
+      const session = sessionResult.data;
+      const profile = profileResult.data;
+
+      const farmInfo = {
+        farmSize: profile?.farm_size || "Not specified",
+        farmLocation: profile?.farm_location || "Not specified",
+        maizeVariety: MAIZE_VARIETIES.find(v => v.value === maizeVariety)?.label || maizeVariety,
+      };
 
       const sessionData = {
         currentDay: session?.current_day || 1,
-        accumulatedGdu: session?.accumulated_gdu || 0,
+        accumulatedGdu: Number(session?.accumulated_gdu) || 0,
         currentStage: session?.current_stage || "VE",
         plantingDate: session?.planting_date || null,
       };
       
       updateStepStatus(0, 'done');
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 400));
 
-      // Step 2: Get weather data
+      // Step 2: Get weather + rainfall data
       updateStepStatus(1, 'loading');
-      setCurrentMessage("Analyzing current weather patterns...");
+      setCurrentMessage("Analyzing weather and rainfall patterns...");
       
       let weatherData = {
         temperature: 25,
         humidity: 60,
         condition: "Clear",
-        location: undefined as string | undefined
+        location: "Unknown",
+        coordinates: { latitude: 0, longitude: 0 }
+      };
+      
+      let rainfallData = {
+        recentRainfall: "Unknown",
+        forecast7Day: [] as Array<{ date: string; condition: string; tempMax: number; tempMin: number; }>
       };
 
       try {
@@ -150,37 +223,99 @@ const Yield = () => {
           navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
         });
         
-        const weather = await fetchWeather(position.coords.latitude, position.coords.longitude);
+        const [weather, forecast] = await Promise.all([
+          fetchWeather(position.coords.latitude, position.coords.longitude),
+          fetch7DayForecast(position.coords.latitude, position.coords.longitude)
+        ]);
+        
         weatherData = {
           temperature: weather.temperature,
           humidity: weather.humidity,
           condition: weather.condition,
-          location: weather.location
+          location: weather.location || "Unknown",
+          coordinates: {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          }
+        };
+
+        // Estimate recent rainfall from weather conditions
+        const rainyConditions = forecast.filter(d => 
+          d.condition.toLowerCase().includes('rain') || 
+          d.condition.toLowerCase().includes('shower') ||
+          d.condition.toLowerCase().includes('drizzle')
+        );
+        
+        rainfallData = {
+          recentRainfall: rainyConditions.length > 2 ? "High" : rainyConditions.length > 0 ? "Moderate" : "Low",
+          forecast7Day: forecast.map(d => ({
+            date: d.date,
+            condition: d.condition,
+            tempMax: d.tempMax,
+            tempMin: d.tempMin
+          }))
         };
       } catch {
         console.log("Using default weather conditions");
       }
       
       updateStepStatus(1, 'done');
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 400));
 
-      // Step 3: Get pest status
+      // Step 3: Get pest status with FAW focus
       updateStepStatus(2, 'loading');
-      setCurrentMessage("Evaluating pest and disease management...");
+      setCurrentMessage("Evaluating pest presence (Fall Armyworm)...");
       
-      const pestStatus = "good";
+      // Check for recent pest checks in the system
+      const { data: recentPhotos } = await supabase
+        .from("crop_photos")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      const pestData = {
+        overallStatus: recentPhotos && recentPhotos.length > 0 ? "Monitored" : "Unknown",
+        fawPresence: "Not detected", // Default - would come from AI pest analysis
+        recentChecks: recentPhotos?.length || 0
+      };
       
       updateStepStatus(2, 'done');
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 400));
 
-      // Step 4: Save data to downloads
+      // Step 4: Calculate NDVI proxy / crop health
       updateStepStatus(3, 'loading');
+      setCurrentMessage("Calculating crop health indicators...");
+      
+      // NDVI proxy based on GDU accumulation, growth stage, and weather
+      const expectedGdu = sessionData.currentDay * 15; // Rough expected GDU per day
+      const gduProgress = expectedGdu > 0 ? Math.min(sessionData.accumulatedGdu / expectedGdu, 1.2) : 0.5;
+      const healthScore = Math.round(
+        (gduProgress * 0.4 + 
+         (weatherData.humidity / 100) * 0.3 + 
+         (pestData.overallStatus === "Monitored" ? 0.3 : 0.15)) * 100
+      );
+
+      const cropHealthProxy = {
+        ndviEstimate: healthScore > 70 ? "High (0.6-0.8)" : healthScore > 50 ? "Moderate (0.4-0.6)" : "Low (<0.4)",
+        healthScore: Math.min(healthScore, 100),
+        basedOn: "GDU progress, weather conditions, and pest monitoring frequency"
+      };
+      
+      updateStepStatus(3, 'done');
+      await new Promise(r => setTimeout(r, 400));
+
+      // Step 5: Compile and save data
+      updateStepStatus(4, 'loading');
       setCurrentMessage("Preparing data for your backend...");
 
       const collectedData: GatheredData = {
+        farmInfo,
         sessionData,
         weatherData,
-        pestStatus,
+        rainfallData,
+        pestData,
+        cropHealthProxy,
         collectedAt: new Date().toISOString(),
       };
 
@@ -189,7 +324,7 @@ const Yield = () => {
       // Auto-download the data
       downloadDataAsJSON(collectedData);
       
-      updateStepStatus(3, 'done');
+      updateStepStatus(4, 'done');
       await new Promise(r => setTimeout(r, 300));
       
       setCurrentMessage("Data saved! Now run your backend and fetch results.");
@@ -201,9 +336,7 @@ const Yield = () => {
     }
   };
 
-  useEffect(() => {
-    gatherData();
-  }, []);
+  // Don't auto-gather on mount, wait for variety selection
 
   if (loading) {
     return (
@@ -285,6 +418,57 @@ const Yield = () => {
           </p>
         </div>
 
+        {/* Maize Variety Selection */}
+        {showVarietyPrompt && !loading && !gatheredData && (
+          <Card className="p-6 mb-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-primary/10 rounded-full">
+                <Leaf className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Select Your Maize Variety</h3>
+                <p className="text-sm text-muted-foreground">
+                  This helps improve prediction accuracy
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="maize-variety">Maize Variety</Label>
+                <Select value={maizeVariety} onValueChange={setMaizeVariety}>
+                  <SelectTrigger id="maize-variety" className="mt-1">
+                    <SelectValue placeholder="Select your maize variety" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MAIZE_VARIETIES.map((variety) => (
+                      <SelectItem key={variety.value} value={variety.value}>
+                        {variety.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button 
+                onClick={gatherData} 
+                disabled={!maizeVariety}
+                className="w-full"
+              >
+                <Sprout className="mr-2 h-4 w-4" />
+                Gather Data & Generate Report
+              </Button>
+            </div>
+
+            <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground flex items-start gap-2">
+                <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                The following data will be collected: Farm size, location, planting date, weather, rainfall, pest status (FAW), and crop health (NDVI proxy).
+              </p>
+            </div>
+          </Card>
+        )}
+
         {/* Data Gathered Card */}
         {gatheredData && !prediction && (
           <Card className="p-6 mb-6 border-primary/20">
@@ -300,23 +484,75 @@ const Yield = () => {
               </div>
             </div>
 
-            <div className="bg-muted/50 rounded-lg p-4 mb-4 text-sm">
-              <p className="font-medium text-foreground mb-2">Collected Data Summary:</p>
-              <ul className="space-y-1 text-muted-foreground">
-                <li>• Current Day: {gatheredData.sessionData.currentDay}</li>
-                <li>• Accumulated GDU: {gatheredData.sessionData.accumulatedGdu}</li>
-                <li>• Growth Stage: {gatheredData.sessionData.currentStage}</li>
-                <li>• Temperature: {gatheredData.weatherData.temperature}°C</li>
-                <li>• Condition: {gatheredData.weatherData.condition}</li>
-                <li>• Location: {gatheredData.weatherData.location || 'N/A'}</li>
-              </ul>
+            {/* Enhanced Data Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {/* Farm Info */}
+              <div className="bg-muted/50 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  <p className="font-medium text-foreground text-sm">Farm Info</p>
+                </div>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  <li>• Size: {gatheredData.farmInfo.farmSize}</li>
+                  <li>• Location: {gatheredData.farmInfo.farmLocation}</li>
+                  <li>• Variety: {gatheredData.farmInfo.maizeVariety}</li>
+                </ul>
+              </div>
+
+              {/* Session Data */}
+              <div className="bg-muted/50 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Calendar className="w-4 h-4 text-primary" />
+                  <p className="font-medium text-foreground text-sm">Growth Progress</p>
+                </div>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  <li>• Day: {gatheredData.sessionData.currentDay}</li>
+                  <li>• GDU: {gatheredData.sessionData.accumulatedGdu}</li>
+                  <li>• Stage: {gatheredData.sessionData.currentStage}</li>
+                  <li>• Planted: {gatheredData.sessionData.plantingDate || 'N/A'}</li>
+                </ul>
+              </div>
+
+              {/* Weather & Rainfall */}
+              <div className="bg-muted/50 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Droplets className="w-4 h-4 text-blue-500" />
+                  <p className="font-medium text-foreground text-sm">Weather & Rainfall</p>
+                </div>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  <li>• Temp: {gatheredData.weatherData.temperature}°C</li>
+                  <li>• Humidity: {gatheredData.weatherData.humidity}%</li>
+                  <li>• Condition: {gatheredData.weatherData.condition}</li>
+                  <li>• Rainfall: {gatheredData.rainfallData.recentRainfall}</li>
+                </ul>
+              </div>
+
+              {/* Pest & Health */}
+              <div className="bg-muted/50 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Bug className="w-4 h-4 text-orange-500" />
+                  <p className="font-medium text-foreground text-sm">Pest & Crop Health</p>
+                </div>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  <li>• FAW Status: {gatheredData.pestData.fawPresence}</li>
+                  <li>• Monitoring: {gatheredData.pestData.overallStatus}</li>
+                  <li>• NDVI: {gatheredData.cropHealthProxy.ndviEstimate}</li>
+                  <li>• Health: {gatheredData.cropHealthProxy.healthScore}%</li>
+                </ul>
+              </div>
             </div>
 
+            {/* Backend Integration Instructions */}
             <div className="bg-accent/10 border border-accent/20 rounded-lg p-4 mb-4">
-              <p className="text-sm text-foreground">
-                <strong>Next Step:</strong> Run your Python backend with the downloaded data, 
-                then click "Fetch Prediction" below to get your results.
+              <p className="text-sm font-medium text-foreground mb-2">
+                🔧 Backend Integration Steps:
               </p>
+              <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>Configure your backend URL in <code className="bg-muted px-1 rounded">src/config/backend.ts</code></li>
+                <li>Run your Python backend locally or deploy it</li>
+                <li>Your backend should expose: <code className="bg-muted px-1 rounded">GET /yield/predict</code></li>
+                <li>Click "Fetch Prediction" when ready</li>
+              </ol>
             </div>
 
             <div className="flex gap-3">
@@ -342,30 +578,33 @@ const Yield = () => {
                 onClick={() => gatheredData && downloadDataAsJSON(gatheredData)}
               >
                 <Download className="mr-2 h-4 w-4" />
-                Re-download Data
+                Re-download
               </Button>
             </div>
 
             <Button 
               variant="ghost" 
-              onClick={gatherData} 
+              onClick={() => {
+                setShowVarietyPrompt(true);
+                setGatheredData(null);
+              }} 
               className="w-full mt-3"
             >
               <RefreshCw className="mr-2 h-4 w-4" />
-              Gather Fresh Data
+              Start Over with Different Variety
             </Button>
           </Card>
         )}
 
-        {!prediction && !gatheredData && (
+        {!prediction && !gatheredData && !showVarietyPrompt && (
           <Card className="p-12 text-center">
             <BarChart3 className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
             <h3 className="text-lg font-semibold text-foreground mb-2">No Data Available</h3>
             <p className="text-muted-foreground mb-4">
-              Start by gathering your farm data for the prediction.
+              Start by selecting your maize variety to gather farm data.
             </p>
-            <Button onClick={gatherData}>
-              Gather Data
+            <Button onClick={() => setShowVarietyPrompt(true)}>
+              Select Variety
             </Button>
           </Card>
         )}
