@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { TrendingUp, Loader2, BarChart3, Target, Sprout, Cloud, Bug, Sparkles } from "lucide-react";
+import { TrendingUp, Loader2, BarChart3, Target, Sprout, Cloud, Bug, Sparkles, Download, RefreshCw, CheckCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { predictYield, fetchWeather } from "@/lib/api";
@@ -7,6 +7,7 @@ import { YieldPrediction } from "@/types/farm";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
+import { backendConfig } from "@/config/backend";
 
 interface GatheringStep {
   label: string;
@@ -14,14 +15,34 @@ interface GatheringStep {
   status: 'pending' | 'loading' | 'done';
 }
 
+interface GatheredData {
+  sessionData: {
+    currentDay: number;
+    accumulatedGdu: number;
+    currentStage: string;
+    plantingDate: string | null;
+  };
+  weatherData: {
+    temperature: number;
+    humidity: number;
+    condition: string;
+    location?: string;
+  };
+  pestStatus: string;
+  collectedAt: string;
+}
+
 const Yield = () => {
   const [prediction, setPrediction] = useState<YieldPrediction | null>(null);
   const [loading, setLoading] = useState(true);
+  const [gatheredData, setGatheredData] = useState<GatheredData | null>(null);
+  const [dataDownloaded, setDataDownloaded] = useState(false);
+  const [fetchingFromBackend, setFetchingFromBackend] = useState(false);
   const [gatheringSteps, setGatheringSteps] = useState<GatheringStep[]>([
     { label: 'Fetching farm session data', icon: Sprout, status: 'pending' },
     { label: 'Getting current weather conditions', icon: Cloud, status: 'pending' },
     { label: 'Analyzing pest management status', icon: Bug, status: 'pending' },
-    { label: 'Running AI prediction model', icon: Sparkles, status: 'pending' },
+    { label: 'Saving data for prediction', icon: Download, status: 'pending' },
   ]);
   const [currentMessage, setCurrentMessage] = useState("Preparing your yield analysis...");
 
@@ -31,8 +52,62 @@ const Yield = () => {
     ));
   };
 
-  const loadPrediction = async () => {
+  const downloadDataAsJSON = (data: GatheredData) => {
+    const jsonString = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `farm-yield-data-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setDataDownloaded(true);
+    toast.success("Data saved to Downloads folder!");
+  };
+
+  const fetchPredictionFromBackend = async () => {
+    if (!backendConfig.apiUrl) {
+      toast.error("Backend URL not configured. Go to Settings to configure.");
+      return;
+    }
+
+    setFetchingFromBackend(true);
+    try {
+      const response = await fetch(`${backendConfig.apiUrl}/yield/predict`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Backend not ready or prediction not available yet');
+      }
+
+      const result = await response.json();
+      setPrediction(result);
+      toast.success("Prediction fetched from your backend!");
+    } catch (error: any) {
+      console.error("Backend fetch error:", error);
+      toast.error(error.message || "Could not fetch from backend. Make sure it's running.");
+    } finally {
+      setFetchingFromBackend(false);
+    }
+  };
+
+  const gatherData = async () => {
     setLoading(true);
+    setPrediction(null);
+    setDataDownloaded(false);
+    setGatheringSteps([
+      { label: 'Fetching farm session data', icon: Sprout, status: 'pending' },
+      { label: 'Getting current weather conditions', icon: Cloud, status: 'pending' },
+      { label: 'Analyzing pest management status', icon: Bug, status: 'pending' },
+      { label: 'Saving data for prediction', icon: Download, status: 'pending' },
+    ]);
     
     try {
       // Step 1: Get farm session data
@@ -49,9 +124,12 @@ const Yield = () => {
         .eq("status", "active")
         .maybeSingle();
 
-      const currentDay = session?.current_day || 1;
-      const accumulatedGdu = session?.accumulated_gdu || 0;
-      const currentStage = session?.current_stage || "VE";
+      const sessionData = {
+        currentDay: session?.current_day || 1,
+        accumulatedGdu: session?.accumulated_gdu || 0,
+        currentStage: session?.current_stage || "VE",
+        plantingDate: session?.planting_date || null,
+      };
       
       updateStepStatus(0, 'done');
       await new Promise(r => setTimeout(r, 500));
@@ -60,27 +138,26 @@ const Yield = () => {
       updateStepStatus(1, 'loading');
       setCurrentMessage("Analyzing current weather patterns...");
       
-      let weatherConditions: any = {
+      let weatherData = {
         temperature: 25,
         humidity: 60,
-        condition: "Clear"
+        condition: "Clear",
+        location: undefined as string | undefined
       };
 
       try {
-        // Try to get location and weather
         const position = await new Promise<GeolocationPosition>((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
         });
         
         const weather = await fetchWeather(position.coords.latitude, position.coords.longitude);
-        weatherConditions = {
+        weatherData = {
           temperature: weather.temperature,
           humidity: weather.humidity,
           condition: weather.condition,
           location: weather.location
         };
       } catch {
-        // Use default weather if location/API fails
         console.log("Using default weather conditions");
       }
       
@@ -91,41 +168,41 @@ const Yield = () => {
       updateStepStatus(2, 'loading');
       setCurrentMessage("Evaluating pest and disease management...");
       
-      // Check if there were any recent pest checks with issues
-      const pestStatus = "good"; // Default to good, could enhance with actual pest check history
+      const pestStatus = "good";
       
       updateStepStatus(2, 'done');
       await new Promise(r => setTimeout(r, 500));
 
-      // Step 4: Run AI prediction
+      // Step 4: Save data to downloads
       updateStepStatus(3, 'loading');
-      setCurrentMessage("Our AI is crunching the numbers... Sit back and relax! 🌽");
+      setCurrentMessage("Preparing data for your backend...");
+
+      const collectedData: GatheredData = {
+        sessionData,
+        weatherData,
+        pestStatus,
+        collectedAt: new Date().toISOString(),
+      };
+
+      setGatheredData(collectedData);
       
-      const data = await predictYield({
-        currentDay,
-        weatherConditions: {
-          ...weatherConditions,
-          accumulatedGdu,
-          currentStage,
-        },
-        pestStatus
-      });
+      // Auto-download the data
+      downloadDataAsJSON(collectedData);
       
       updateStepStatus(3, 'done');
       await new Promise(r => setTimeout(r, 300));
       
-      setPrediction(data);
-      toast.success("Yield prediction ready!");
+      setCurrentMessage("Data saved! Now run your backend and fetch results.");
     } catch (error: any) {
-      console.error("Prediction error:", error);
-      toast.error(error.message || "Failed to get yield prediction");
+      console.error("Data gathering error:", error);
+      toast.error(error.message || "Failed to gather data");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadPrediction();
+    gatherData();
   }, []);
 
   if (loading) {
@@ -208,23 +285,92 @@ const Yield = () => {
           </p>
         </div>
 
-        {!prediction ? (
-          <Card className="p-12 text-center">
-            <BarChart3 className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">Prediction Unavailable</h3>
-            <p className="text-muted-foreground mb-4">
-              Unable to generate prediction. Please ensure your backend is configured.
-            </p>
-            <div className="flex gap-3 justify-center">
-              <Button onClick={loadPrediction}>
-                Try Again
+        {/* Data Gathered Card */}
+        {gatheredData && !prediction && (
+          <Card className="p-6 mb-6 border-primary/20">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-green-500/10 rounded-full">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Data Collected & Downloaded!</h3>
+                <p className="text-sm text-muted-foreground">
+                  Your farm data has been saved to your Downloads folder.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-muted/50 rounded-lg p-4 mb-4 text-sm">
+              <p className="font-medium text-foreground mb-2">Collected Data Summary:</p>
+              <ul className="space-y-1 text-muted-foreground">
+                <li>• Current Day: {gatheredData.sessionData.currentDay}</li>
+                <li>• Accumulated GDU: {gatheredData.sessionData.accumulatedGdu}</li>
+                <li>• Growth Stage: {gatheredData.sessionData.currentStage}</li>
+                <li>• Temperature: {gatheredData.weatherData.temperature}°C</li>
+                <li>• Condition: {gatheredData.weatherData.condition}</li>
+                <li>• Location: {gatheredData.weatherData.location || 'N/A'}</li>
+              </ul>
+            </div>
+
+            <div className="bg-accent/10 border border-accent/20 rounded-lg p-4 mb-4">
+              <p className="text-sm text-foreground">
+                <strong>Next Step:</strong> Run your Python backend with the downloaded data, 
+                then click "Fetch Prediction" below to get your results.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button 
+                onClick={fetchPredictionFromBackend} 
+                disabled={fetchingFromBackend}
+                className="flex-1"
+              >
+                {fetchingFromBackend ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Fetching...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Fetch Prediction from Backend
+                  </>
+                )}
               </Button>
-              <Button variant="outline" onClick={() => window.location.href = '/settings'}>
-                Configure Backend
+              <Button 
+                variant="outline" 
+                onClick={() => gatheredData && downloadDataAsJSON(gatheredData)}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Re-download Data
               </Button>
             </div>
+
+            <Button 
+              variant="ghost" 
+              onClick={gatherData} 
+              className="w-full mt-3"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Gather Fresh Data
+            </Button>
           </Card>
-        ) : (
+        )}
+
+        {!prediction && !gatheredData && (
+          <Card className="p-12 text-center">
+            <BarChart3 className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">No Data Available</h3>
+            <p className="text-muted-foreground mb-4">
+              Start by gathering your farm data for the prediction.
+            </p>
+            <Button onClick={gatherData}>
+              Gather Data
+            </Button>
+          </Card>
+        )}
+
+        {prediction && (
           <>
             {/* Main Prediction Card */}
             <Card className="p-8 mb-6 bg-gradient-farm border-none shadow-elevated">
@@ -348,13 +494,28 @@ const Yield = () => {
                 </li>
               </ul>
 
-              <Button 
-                onClick={loadPrediction} 
-                variant="outline" 
-                className="w-full mt-6"
-              >
-                Refresh Prediction
-              </Button>
+              <div className="flex gap-3 mt-6">
+                <Button 
+                  onClick={gatherData} 
+                  variant="outline" 
+                  className="flex-1"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Gather New Data
+                </Button>
+                <Button 
+                  onClick={fetchPredictionFromBackend}
+                  disabled={fetchingFromBackend}
+                  className="flex-1"
+                >
+                  {fetchingFromBackend ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-2 h-4 w-4" />
+                  )}
+                  Refresh from Backend
+                </Button>
+              </div>
             </Card>
           </>
         )}
