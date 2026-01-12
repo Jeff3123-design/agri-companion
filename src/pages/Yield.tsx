@@ -73,14 +73,41 @@ const MAIZE_VARIETIES = [
   { value: "other", label: "Other" },
 ];
 
+const STORAGE_KEY = 'yield_gathered_data';
+const PREDICTION_STORAGE_KEY = 'yield_prediction';
+
 const Yield = () => {
-  const [prediction, setPrediction] = useState<YieldPrediction | null>(null);
+  // Load initial state from localStorage
+  const [prediction, setPrediction] = useState<YieldPrediction | null>(() => {
+    try {
+      const saved = localStorage.getItem(PREDICTION_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
   const [loading, setLoading] = useState(false);
-  const [gatheredData, setGatheredData] = useState<GatheredData | null>(null);
-  const [dataDownloaded, setDataDownloaded] = useState(false);
+  const [gatheredData, setGatheredData] = useState<GatheredData | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+  const [dataDownloaded, setDataDownloaded] = useState(() => {
+    return !!localStorage.getItem(STORAGE_KEY);
+  });
   const [fetchingFromBackend, setFetchingFromBackend] = useState(false);
-  const [maizeVariety, setMaizeVariety] = useState<string>("");
-  const [showVarietyPrompt, setShowVarietyPrompt] = useState(true);
+  const [maizeVariety, setMaizeVariety] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        return MAIZE_VARIETIES.find(v => v.label === data.farmInfo?.maizeVariety)?.value || "";
+      }
+    } catch {}
+    return "";
+  });
+  const [showVarietyPrompt, setShowVarietyPrompt] = useState(() => {
+    return !localStorage.getItem(STORAGE_KEY);
+  });
   const [gatheringSteps, setGatheringSteps] = useState<GatheringStep[]>([
     { label: 'Fetching farm & profile data', icon: Sprout, status: 'pending' },
     { label: 'Getting weather & rainfall data', icon: Cloud, status: 'pending' },
@@ -133,6 +160,8 @@ const Yield = () => {
 
       const result = await response.json();
       setPrediction(result);
+      // Save prediction to localStorage
+      localStorage.setItem(PREDICTION_STORAGE_KEY, JSON.stringify(result));
       toast.success("Prediction fetched from your backend!");
     } catch (error: any) {
       console.error("Backend fetch error:", error);
@@ -320,6 +349,9 @@ const Yield = () => {
       };
 
       setGatheredData(collectedData);
+      
+      // Save to localStorage for persistence
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(collectedData));
       
       // Auto-download the data
       downloadDataAsJSON(collectedData);
@@ -585,8 +617,14 @@ const Yield = () => {
             <Button 
               variant="ghost" 
               onClick={() => {
+                // Clear localStorage and reset state
+                localStorage.removeItem(STORAGE_KEY);
+                localStorage.removeItem(PREDICTION_STORAGE_KEY);
                 setShowVarietyPrompt(true);
                 setGatheredData(null);
+                setPrediction(null);
+                setMaizeVariety("");
+                setDataDownloaded(false);
               }} 
               className="w-full mt-3"
             >
