@@ -574,18 +574,6 @@ const Yield = () => {
               </div>
             </div>
 
-            {/* Backend Integration Instructions */}
-            <div className="bg-accent/10 border border-accent/20 rounded-lg p-4 mb-4">
-              <p className="text-sm font-medium text-foreground mb-2">
-                🔧 Backend Integration Steps:
-              </p>
-              <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                <li>Configure your backend URL in <code className="bg-muted px-1 rounded">src/config/backend.ts</code></li>
-                <li>Run your Python backend locally or deploy it</li>
-                <li>Your backend should expose: <code className="bg-muted px-1 rounded">GET /yield/predict</code></li>
-                <li>Click "Fetch Prediction" when ready</li>
-              </ol>
-            </div>
 
             <div className="flex gap-3">
               <Button 
