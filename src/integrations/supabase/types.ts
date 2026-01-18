@@ -143,6 +143,8 @@ export type Database = {
           farm_size: string | null
           full_name: string
           id: string
+          latitude: number | null
+          longitude: number | null
           updated_at: string | null
         }
         Insert: {
@@ -152,6 +154,8 @@ export type Database = {
           farm_size?: string | null
           full_name: string
           id: string
+          latitude?: number | null
+          longitude?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -161,6 +165,8 @@ export type Database = {
           farm_size?: string | null
           full_name?: string
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           updated_at?: string | null
         }
         Relationships: []

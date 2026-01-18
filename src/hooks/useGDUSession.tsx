@@ -35,22 +35,35 @@ export const useGDUSession = (userId: string | undefined) => {
   const [isAutoFetching, setIsAutoFetching] = useState(false);
   const previousStageRef = useRef<string | null>(null);
 
-  // Get user location on mount
+  // Get user location on mount and save to profile for cron job
   useEffect(() => {
-    if (navigator.geolocation) {
+    if (navigator.geolocation && userId) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          setLocation({ lat, lng });
+          
+          // Save location to profile for automatic daily GDU calculation
+          try {
+            await supabase
+              .from("profiles")
+              .update({
+                latitude: lat,
+                longitude: lng,
+              })
+              .eq("id", userId);
+            console.log("Location saved to profile for automatic GDU");
+          } catch (error) {
+            console.error("Failed to save location to profile:", error);
+          }
         },
         (error) => {
           console.log("Location access denied:", error);
         }
       );
     }
-  }, []);
+  }, [userId]);
 
   const sendGrowthStageNotification = async (stage: typeof GDU_STAGES[number], accumulatedGdu: number) => {
     const prefs = getNotificationPreferences();
