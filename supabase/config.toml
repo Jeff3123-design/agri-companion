@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.analyze-pest]
 verify_jwt = false
+
+[functions.daily-gdu-cron]
+verify_jwt = false
