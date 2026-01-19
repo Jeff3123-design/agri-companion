@@ -16,32 +16,48 @@ function calculateDailyGDU(tempMax: number, tempMin: number): number {
   return Math.max(0, gdu);
 }
 
-// Growth stage thresholds
+// Growth stage thresholds with names and descriptions
 const GDU_STAGES = [
-  { stage: "VE", minGdu: 0 },
-  { stage: "V2", minGdu: 100 },
-  { stage: "V4", minGdu: 200 },
-  { stage: "V6", minGdu: 350 },
-  { stage: "V8", minGdu: 475 },
-  { stage: "V10", minGdu: 610 },
-  { stage: "V12", minGdu: 740 },
-  { stage: "V14", minGdu: 870 },
-  { stage: "VT", minGdu: 1000 },
-  { stage: "R1", minGdu: 1135 },
-  { stage: "R2", minGdu: 1400 },
-  { stage: "R3", minGdu: 1660 },
-  { stage: "R4", minGdu: 1925 },
-  { stage: "R5", minGdu: 2190 },
-  { stage: "R6", minGdu: 2450 },
+  { stage: "VE", minGdu: 0, name: "Emergence", description: "Coleoptile emerges from soil" },
+  { stage: "V2", minGdu: 100, name: "2-Leaf Stage", description: "Two leaves with visible collar" },
+  { stage: "V4", minGdu: 200, name: "4-Leaf Stage", description: "Four leaves with visible collar" },
+  { stage: "V6", minGdu: 350, name: "6-Leaf Stage", description: "Growing point above soil, rapid growth begins" },
+  { stage: "V8", minGdu: 475, name: "8-Leaf Stage", description: "Ear shoot initiation begins" },
+  { stage: "V10", minGdu: 610, name: "10-Leaf Stage", description: "Tassel formation begins" },
+  { stage: "V12", minGdu: 740, name: "12-Leaf Stage", description: "Ear size determination" },
+  { stage: "V14", minGdu: 870, name: "14-Leaf Stage", description: "Final ear row number set" },
+  { stage: "VT", minGdu: 1000, name: "Tasseling", description: "Tassel fully emerged" },
+  { stage: "R1", minGdu: 1135, name: "Silking", description: "Silks visible, pollination begins" },
+  { stage: "R2", minGdu: 1400, name: "Blister", description: "Kernels white and blister-like" },
+  { stage: "R3", minGdu: 1660, name: "Milk", description: "Kernels yellow, milky fluid inside" },
+  { stage: "R4", minGdu: 1925, name: "Dough", description: "Kernel contents pasty" },
+  { stage: "R5", minGdu: 2190, name: "Dent", description: "Kernels dented, starch accumulation" },
+  { stage: "R6", minGdu: 2450, name: "Physiological Maturity", description: "Black layer formed, maximum dry weight" },
 ];
 
-function getGrowthStage(accumulatedGdu: number): string {
+interface GduStage {
+  stage: string;
+  minGdu: number;
+  name: string;
+  description: string;
+}
+
+function getGrowthStage(accumulatedGdu: number): GduStage {
   for (let i = GDU_STAGES.length - 1; i >= 0; i--) {
     if (accumulatedGdu >= GDU_STAGES[i].minGdu) {
-      return GDU_STAGES[i].stage;
+      return GDU_STAGES[i];
     }
   }
-  return "VE";
+  return GDU_STAGES[0];
+}
+
+function getNextStage(accumulatedGdu: number): GduStage | null {
+  for (let i = 0; i < GDU_STAGES.length; i++) {
+    if (GDU_STAGES[i].minGdu > accumulatedGdu) {
+      return GDU_STAGES[i];
+    }
+  }
+  return null;
 }
 
 async function fetchTemperatureForLocation(lat: number, lon: number): Promise<{ tempMax: number; tempMin: number } | null> {
@@ -123,10 +139,10 @@ Deno.serve(async (req) => {
     
     for (const session of sessions) {
       try {
-        // Get user profile with location
+        // Get user profile with location and email
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
-          .select("latitude, longitude")
+          .select("latitude, longitude, full_name")
           .eq("id", session.user_id)
           .single();
         
@@ -135,6 +151,10 @@ Deno.serve(async (req) => {
           skippedCount++;
           continue;
         }
+        
+        // Get user email from auth
+        const { data: authUser } = await supabase.auth.admin.getUserById(session.user_id);
+        const userEmail = authUser?.user?.email;
         
         // Check if we already have today's GDU for this session
         const { data: existingGdu, error: existingError } = await supabase
@@ -201,17 +221,56 @@ Deno.serve(async (req) => {
         } else {
           const totalGdu = (allGduRecords || []).reduce((sum, r) => sum + Number(r.gdu), 0);
           const newStage = getGrowthStage(totalGdu);
+          const previousStage = session.current_stage;
           
           // Update session with new accumulated GDU
           await supabase
             .from("farming_sessions")
             .update({
               accumulated_gdu: totalGdu,
-              current_stage: newStage,
+              current_stage: newStage.stage,
             })
             .eq("id", session.id);
           
-          console.log(`Session ${session.id}: Added GDU ${gdu.toFixed(1)}, Total: ${totalGdu.toFixed(1)}, Stage: ${newStage}`);
+          console.log(`Session ${session.id}: Added GDU ${gdu.toFixed(1)}, Total: ${totalGdu.toFixed(1)}, Stage: ${newStage.stage}`);
+          
+          // Check if stage changed and send email notification
+          if (previousStage && previousStage !== newStage.stage && userEmail) {
+            console.log(`Stage changed from ${previousStage} to ${newStage.stage} - sending email to ${userEmail}`);
+            
+            const nextStage = getNextStage(totalGdu);
+            
+            try {
+              const notificationResponse = await fetch(`${supabaseUrl}/functions/v1/send-notifications`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                  type: "growth_stage",
+                  email: userEmail,
+                  userName: profile.full_name || "Farmer",
+                  data: {
+                    stage: newStage.stage,
+                    stageName: newStage.name,
+                    stageDescription: newStage.description,
+                    accumulatedGdu: totalGdu,
+                    nextStage: nextStage?.stage,
+                    nextStageGdu: nextStage?.minGdu,
+                  },
+                }),
+              });
+              
+              if (notificationResponse.ok) {
+                console.log(`Growth stage email sent successfully for session ${session.id}`);
+              } else {
+                console.error(`Failed to send growth stage email: ${notificationResponse.status}`);
+              }
+            } catch (emailError) {
+              console.error(`Error sending growth stage email:`, emailError);
+            }
+          }
         }
         
         processedCount++;
