@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Home, Bug, CloudSun, TrendingUp, Settings, Menu, X, Calendar as CalendarIcon, BarChart3 } from "lucide-react";
+import { Home, Bug, CloudSun, TrendingUp, Menu, X, Calendar as CalendarIcon, BarChart3 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -57,7 +57,6 @@ export const Navigation = () => {
     { icon: Bug, label: "Pest Check", path: "/pest-check" },
     { icon: CloudSun, label: "Weather", path: "/weather" },
     { icon: TrendingUp, label: "Yield", path: "/yield" },
-    { icon: Settings, label: "Settings", path: "/settings" },
   ];
 
   return (
