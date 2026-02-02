@@ -11,6 +11,7 @@ import { Thermometer, Leaf, Calendar, TrendingUp, Plus, History, Target, CloudSu
 import { GDU_STAGES, getGrowthStage, getNextStage, getStageProgress, getDaysSincePlanting, getTasksForStage } from "@/lib/gdu";
 import { GDUSession, DailyGDURecord } from "@/hooks/useGDUSession";
 import { GDUChart } from "@/components/GDUChart";
+import { NextGDUCalculation } from "@/components/NextGDUCalculation";
 import { format } from "date-fns";
 
 interface GDUDashboardProps {
@@ -61,7 +62,7 @@ export const GDUDashboard = ({
   return (
     <div className="space-y-6">
       {/* Main Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card className="bg-gradient-to-br from-primary/10 to-primary/5">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
@@ -76,11 +77,11 @@ export const GDUDashboard = ({
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5">
+        <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-500/20 rounded-lg">
-                <Leaf className="h-5 w-5 text-green-600" />
+              <div className="p-2 bg-emerald-500/20 rounded-lg">
+                <Leaf className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Current Stage</p>
@@ -90,11 +91,11 @@ export const GDUDashboard = ({
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5">
+        <Card className="bg-gradient-to-br from-sky-500/10 to-sky-500/5">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500/20 rounded-lg">
-                <Calendar className="h-5 w-5 text-blue-600" />
+              <div className="p-2 bg-sky-500/20 rounded-lg">
+                <Calendar className="h-5 w-5 text-sky-600 dark:text-sky-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Days Since Planting</p>
@@ -104,11 +105,11 @@ export const GDUDashboard = ({
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-orange-500/10 to-orange-500/5">
+        <Card className="bg-gradient-to-br from-amber-500/10 to-amber-500/5">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-500/20 rounded-lg">
-                <Target className="h-5 w-5 text-orange-600" />
+              <div className="p-2 bg-amber-500/20 rounded-lg">
+                <Target className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">GDU to Next Stage</p>
@@ -117,6 +118,8 @@ export const GDUDashboard = ({
             </div>
           </CardContent>
         </Card>
+
+        <NextGDUCalculation />
       </div>
 
       {/* Growth Stage Progress */}
