@@ -1,23 +1,48 @@
 import { useEffect, useState } from "react";
-import { Home, Bug, CloudSun, TrendingUp, Settings, Menu, X, Calendar as CalendarIcon, User, BarChart3 } from "lucide-react";
+import { Home, Bug, CloudSun, TrendingUp, Settings, Menu, X, Calendar as CalendarIcon, BarChart3 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ProfileAvatar } from "@/components/ProfileAvatar";
 
 export const Navigation = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isOpen, setIsOpen] = useState(false); // mobile menu state
+  const [isOpen, setIsOpen] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<{ full_name?: string; avatar_url?: string | null } | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setIsAuthenticated(!!session);
+      if (session) {
+        setUserId(session.user.id);
+        // Fetch profile
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("full_name, avatar_url")
+          .eq("id", session.user.id)
+          .single();
+        if (profileData) setProfile(profileData);
+      }
     };
     checkAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setIsAuthenticated(!!session);
+      if (session) {
+        setUserId(session.user.id);
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("full_name, avatar_url")
+          .eq("id", session.user.id)
+          .single();
+        if (profileData) setProfile(profileData);
+      } else {
+        setUserId(null);
+        setProfile(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -67,9 +92,17 @@ export const Navigation = () => {
             ))}
           </div>
 
-          {/* Desktop Theme Toggle */}
-          <div className="hidden md:flex items-center">
+          {/* Desktop Theme Toggle + Profile */}
+          <div className="hidden md:flex items-center gap-3">
             <ThemeToggle />
+            {userId && (
+              <ProfileAvatar
+                userId={userId}
+                fullName={profile?.full_name}
+                avatarUrl={profile?.avatar_url}
+                onAvatarUpdate={(url) => setProfile((p) => p ? { ...p, avatar_url: url } : null)}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -127,10 +160,23 @@ export const Navigation = () => {
             </NavLink>
           ))}
 
-          {/* Theme Toggle */}
-          <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Theme</span>
-            <ThemeToggle />
+          {/* Theme Toggle + Profile */}
+          <div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Theme</span>
+              <ThemeToggle />
+            </div>
+            {userId && (
+              <div className="flex items-center gap-3">
+                <ProfileAvatar
+                  userId={userId}
+                  fullName={profile?.full_name}
+                  avatarUrl={profile?.avatar_url}
+                  onAvatarUpdate={(url) => setProfile((p) => p ? { ...p, avatar_url: url } : null)}
+                />
+                <span className="text-sm text-foreground">{profile?.full_name || "Your Profile"}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
