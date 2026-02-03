@@ -123,6 +123,7 @@ const Dashboard = () => {
                 variant="outline"
                 size="icon"
                 onClick={() => navigate("/settings")}
+                aria-label="Settings"
               >
                 <Settings className="h-4 w-4" />
               </Button>
@@ -130,6 +131,7 @@ const Dashboard = () => {
                 variant="outline"
                 size="icon"
                 onClick={handleSignOut}
+                aria-label="Sign out"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
