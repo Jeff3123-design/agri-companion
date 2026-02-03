@@ -186,6 +186,7 @@ export const CropPhotoGallery = ({ userId, sessionId, currentDay }: CropPhotoGal
                   <img
                     src={photo.image_url}
                     alt={photo.description || `Day ${photo.day} photo`}
+                    loading="lazy"
                     className="w-full h-full object-cover transition-transform group-hover:scale-105"
                   />
                 </div>
