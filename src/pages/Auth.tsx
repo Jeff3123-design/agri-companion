@@ -1,60 +1,174 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { toast } from "sonner";
-import { Sprout, ArrowLeft } from "lucide-react";
+import { Sprout, ArrowLeft, Eye, EyeOff } from "lucide-react";
 
-const Auth = () => {
+// Validation Schemas
+const signInSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+const signUpSchema = z.object({
+  fullName: z.string().min(2, "Full name must be at least 2 characters"),
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  farmLocation: z.string().optional(),
+  farmSize: z.string().optional(),
+  contactInfo: z.string().optional(),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+});
+
+type SignInValues = z.infer<typeof signInSchema>;
+type SignUpValues = z.infer<typeof signUpSchema>;
+type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
+
+const SignInForm = ({ onForgotPassword }: { onForgotPassword: () => void }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Check if user is already logged in
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        navigate("/");
-      }
-    };
-    checkUser();
-  }, [navigate]);
+  const form = useForm<SignInValues>({
+    resolver: zodResolver(signInSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
-  const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const onSubmit = async (values: SignInValues) => {
     setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
+      });
 
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get("signup-email") as string;
-    const password = formData.get("signup-password") as string;
-    const fullName = formData.get("full-name") as string;
-    const farmLocation = formData.get("farm-location") as string;
-    const farmSize = formData.get("farm-size") as string;
-    const contactInfo = formData.get("contact-info") as string;
+      if (error) throw error;
 
-    if (!email || !password || !fullName) {
-      toast.error("Please fill in all required fields");
+      toast.success("Welcome back!");
+      navigate("/");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to sign in");
+    } finally {
       setLoading(false);
-      return;
     }
+  };
 
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl>
+                <Input placeholder="farmer@example.com" type="email" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Password</FormLabel>
+              <div className="relative">
+                <FormControl>
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    {...field}
+                  />
+                </FormControl>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? "Signing in..." : "Sign In"}
+        </Button>
+        <Button
+          type="button"
+          variant="link"
+          className="w-full text-sm"
+          onClick={onForgotPassword}
+        >
+          Forgot your password?
+        </Button>
+      </form>
+    </Form>
+  );
+};
+
+const SignUpForm = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const form = useForm<SignUpValues>({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: {
+      fullName: "",
+      email: "",
+      password: "",
+      farmLocation: "",
+      farmSize: "",
+      contactInfo: "",
+    },
+  });
+
+  const onSubmit = async (values: SignUpValues) => {
+    setLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
+        email: values.email,
+        password: values.password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
           data: {
-            full_name: fullName,
-            farm_location: farmLocation,
-            farm_size: farmSize,
-            contact_info: contactInfo,
+            full_name: values.fullName,
+            farm_location: values.farmLocation,
+            farm_size: values.farmSize,
+            contact_info: values.contactInfo,
           },
         },
       });
@@ -72,57 +186,136 @@ const Auth = () => {
     }
   };
 
-  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="fullName"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Full Name *</FormLabel>
+              <FormControl>
+                <Input placeholder="John Farmer" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email *</FormLabel>
+              <FormControl>
+                <Input placeholder="farmer@example.com" type="email" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Password *</FormLabel>
+              <div className="relative">
+                <FormControl>
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Create a password"
+                    {...field}
+                  />
+                </FormControl>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="farmLocation"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Farm Location</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Kansas" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="farmSize"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Farm Size</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., 50 acres" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="contactInfo"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Contact Info</FormLabel>
+              <FormControl>
+                <Input placeholder="Phone number" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? "Creating account..." : "Create Account"}
+        </Button>
+      </form>
+    </Form>
+  );
+};
+
+const ForgotPasswordView = ({ onBack }: { onBack: () => void }) => {
+  const [loading, setLoading] = useState(false);
+
+  const form = useForm<ForgotPasswordValues>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: {
+      email: "",
+    },
+  });
+
+  const onSubmit = async (values: ForgotPasswordValues) => {
     setLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get("signin-email") as string;
-    const password = formData.get("signin-password") as string;
-
-    if (!email || !password) {
-      toast.error("Please enter your email and password");
-      setLoading(false);
-      return;
-    }
-
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      toast.success("Welcome back!");
-      navigate("/");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to sign in");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-
-    if (!resetEmail) {
-      toast.error("Please enter your email address");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      const { error } = await supabase.auth.resetPasswordForEmail(values.email, {
         redirectTo: `${window.location.origin}/auth`,
       });
 
       if (error) throw error;
 
       toast.success("Password reset email sent! Check your inbox.");
-      setShowForgotPassword(false);
-      setResetEmail("");
+      onBack();
     } catch (error: any) {
       toast.error(error.message || "Failed to send reset email");
     } finally {
@@ -130,33 +323,34 @@ const Auth = () => {
     }
   };
 
-  // Forgot Password View
-  if (showForgotPassword) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-primary/5 to-background p-4 overflow-x-hidden">
-        <Card className="w-full max-w-md">
-          <CardHeader className="space-y-1 text-center">
-            <div className="flex justify-center mb-4">
-              <div className="p-3 rounded-full bg-primary/10">
-                <Sprout className="h-8 w-8 text-primary" />
-              </div>
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-primary/5 to-background p-4 overflow-x-hidden">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="p-3 rounded-full bg-primary/10">
+              <Sprout className="h-8 w-8 text-primary" />
             </div>
-            <CardTitle className="text-xl sm:text-2xl font-bold break-words">Reset Password</CardTitle>
-            <CardDescription className="break-words">Enter your email to receive a reset link</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleForgotPassword} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="reset-email">Email</Label>
-                <Input
-                  id="reset-email"
-                  type="email"
-                  placeholder="farmer@example.com"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  required
-                />
-              </div>
+          </div>
+          <CardTitle className="text-xl sm:text-2xl font-bold break-words">Reset Password</CardTitle>
+          <CardDescription className="break-words">Enter your email to receive a reset link</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input placeholder="farmer@example.com" type="email" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Sending..." : "Send Reset Link"}
               </Button>
@@ -164,16 +358,36 @@ const Auth = () => {
                 type="button"
                 variant="ghost"
                 className="w-full"
-                onClick={() => setShowForgotPassword(false)}
+                onClick={onBack}
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Sign In
               </Button>
             </form>
-          </CardContent>
-        </Card>
-      </div>
-    );
+          </Form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+const Auth = () => {
+  const navigate = useNavigate();
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        navigate("/");
+      }
+    };
+    checkUser();
+  }, [navigate]);
+
+  if (showForgotPassword) {
+    return <ForgotPasswordView onBack={() => setShowForgotPassword(false)} />;
   }
 
   return (
@@ -196,102 +410,11 @@ const Auth = () => {
             </TabsList>
             
             <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
-                  <Input
-                    id="signin-email"
-                    name="signin-email"
-                    type="email"
-                    placeholder="farmer@example.com"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signin-password">Password</Label>
-                  <Input
-                    id="signin-password"
-                    name="signin-password"
-                    type="password"
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Signing in..." : "Sign In"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="link"
-                  className="w-full text-sm"
-                  onClick={() => setShowForgotPassword(true)}
-                >
-                  Forgot your password?
-                </Button>
-              </form>
+              <SignInForm onForgotPassword={() => setShowForgotPassword(true)} />
             </TabsContent>
             
             <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="full-name">Full Name *</Label>
-                  <Input
-                    id="full-name"
-                    name="full-name"
-                    type="text"
-                    placeholder="John Farmer"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email *</Label>
-                  <Input
-                    id="signup-email"
-                    name="signup-email"
-                    type="email"
-                    placeholder="farmer@example.com"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password *</Label>
-                  <Input
-                    id="signup-password"
-                    name="signup-password"
-                    type="password"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="farm-location">Farm Location</Label>
-                  <Input
-                    id="farm-location"
-                    name="farm-location"
-                    type="text"
-                    placeholder="e.g., Kansas"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="farm-size">Farm Size</Label>
-                  <Input
-                    id="farm-size"
-                    name="farm-size"
-                    type="text"
-                    placeholder="e.g., 50 acres"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contact-info">Contact Info</Label>
-                  <Input
-                    id="contact-info"
-                    name="contact-info"
-                    type="text"
-                    placeholder="Phone number"
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Creating account..." : "Create Account"}
-                </Button>
-              </form>
+              <SignUpForm />
             </TabsContent>
           </Tabs>
         </CardContent>
