@@ -1,54 +1,18 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Home, Bug, CloudSun, TrendingUp, Menu, X, Calendar as CalendarIcon, BarChart3 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const Navigation = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { session, profile } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [profile, setProfile] = useState<{ full_name?: string; avatar_url?: string | null } | null>(null);
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session);
-      if (session) {
-        setUserId(session.user.id);
-        // Fetch profile
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("full_name, avatar_url")
-          .eq("id", session.user.id)
-          .single();
-        if (profileData) setProfile(profileData);
-      }
-    };
-    checkAuth();
+  if (!session) return null;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setIsAuthenticated(!!session);
-      if (session) {
-        setUserId(session.user.id);
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("full_name, avatar_url")
-          .eq("id", session.user.id)
-          .single();
-        if (profileData) setProfile(profileData);
-      } else {
-        setUserId(null);
-        setProfile(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  if (!isAuthenticated) return null;
+  const userId = session.user.id;
 
   const navItems = [
     { icon: Home, label: "Dashboard", path: "/dashboard" },
@@ -97,9 +61,8 @@ export const Navigation = () => {
             {userId && (
               <ProfileAvatar
                 userId={userId}
-                fullName={profile?.full_name}
+                fullName={profile?.full_name || undefined}
                 avatarUrl={profile?.avatar_url}
-                onAvatarUpdate={(url) => setProfile((p) => p ? { ...p, avatar_url: url } : null)}
               />
             )}
           </div>
@@ -169,9 +132,8 @@ export const Navigation = () => {
               <div className="flex items-center gap-3">
                 <ProfileAvatar
                   userId={userId}
-                  fullName={profile?.full_name}
+                  fullName={profile?.full_name || undefined}
                   avatarUrl={profile?.avatar_url}
-                  onAvatarUpdate={(url) => setProfile((p) => p ? { ...p, avatar_url: url } : null)}
                 />
                 <span className="text-sm text-foreground">{profile?.full_name || "Your Profile"}</span>
               </div>

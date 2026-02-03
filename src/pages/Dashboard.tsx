@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { WeatherWidget } from "@/components/WeatherWidget";
 import { WeatherRecommendations } from "@/components/WeatherRecommendations";
 import { WeatherAlerts } from "@/components/WeatherAlerts";
@@ -15,11 +14,11 @@ import { WeatherData } from "@/types/farm";
 import { Button } from "@/components/ui/button";
 import { LogOut, Settings, Loader2 } from "lucide-react";
 import { getGrowthStage, getDaysSincePlanting } from "@/lib/gdu";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const { user, profile, signOut } = useAuth();
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
@@ -36,44 +35,6 @@ const Dashboard = () => {
     }
   }, []);
 
-  // Auth check
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/auth");
-        return;
-      }
-      setUser(session.user);
-
-      // Fetch profile
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
-      
-      if (profileData) {
-        setProfile(profileData);
-        if (!profileData.farm_location) {
-          navigate("/setup");
-        }
-      }
-    };
-
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        navigate("/auth");
-      } else {
-        setUser(session.user);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
-
   const { 
     session: gduSession, 
     dailyRecords, 
@@ -87,8 +48,7 @@ const Dashboard = () => {
   } = useGDUSession(user?.id);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate("/auth");
+    await signOut();
   };
 
   const handleStartCycle = async (plantingDate: Date) => {
