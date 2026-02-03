@@ -33,13 +33,9 @@ const Auth = () => {
     const formData = new FormData(e.currentTarget);
     const email = formData.get("signup-email") as string;
     const password = formData.get("signup-password") as string;
-    const fullName = formData.get("full-name") as string;
-    const farmLocation = formData.get("farm-location") as string;
-    const farmSize = formData.get("farm-size") as string;
-    const contactInfo = formData.get("contact-info") as string;
 
-    if (!email || !password || !fullName) {
-      toast.error("Please fill in all required fields");
+    if (!email || !password) {
+      toast.error("Please enter email and password");
       setLoading(false);
       return;
     }
@@ -50,20 +46,18 @@ const Auth = () => {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            full_name: fullName,
-            farm_location: farmLocation,
-            farm_size: farmSize,
-            contact_info: contactInfo,
-          },
         },
       });
 
       if (error) throw error;
 
       if (data.user) {
-        toast.success("Account created successfully! Welcome to Farm Buddy!");
-        navigate("/");
+        if (data.session) {
+          toast.success("Account created successfully! Let's set up your profile.");
+          navigate("/setup");
+        } else {
+          toast.success("Account created! Please check your email to verify.");
+        }
       }
     } catch (error: any) {
       toast.error(error.message || "Failed to create account");
@@ -233,17 +227,7 @@ const Auth = () => {
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="full-name">Full Name *</Label>
-                  <Input
-                    id="full-name"
-                    name="full-name"
-                    type="text"
-                    placeholder="John Farmer"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email *</Label>
+                  <Label htmlFor="signup-email">Email</Label>
                   <Input
                     id="signup-email"
                     name="signup-email"
@@ -253,39 +237,12 @@ const Auth = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password *</Label>
+                  <Label htmlFor="signup-password">Password</Label>
                   <Input
                     id="signup-password"
                     name="signup-password"
                     type="password"
                     required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="farm-location">Farm Location</Label>
-                  <Input
-                    id="farm-location"
-                    name="farm-location"
-                    type="text"
-                    placeholder="e.g., Kansas"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="farm-size">Farm Size</Label>
-                  <Input
-                    id="farm-size"
-                    name="farm-size"
-                    type="text"
-                    placeholder="e.g., 50 acres"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contact-info">Contact Info</Label>
-                  <Input
-                    id="contact-info"
-                    name="contact-info"
-                    type="text"
-                    placeholder="Phone number"
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>

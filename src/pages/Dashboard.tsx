@@ -55,6 +55,9 @@ const Dashboard = () => {
       
       if (profileData) {
         setProfile(profileData);
+        if (!profileData.farm_location) {
+          navigate("/setup");
+        }
       }
     };
 

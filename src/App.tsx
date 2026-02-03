@@ -21,6 +21,7 @@ import Weather from "./pages/Weather";
 import Yield from "./pages/Yield";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
+import Setup from "./pages/Setup";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -52,6 +53,7 @@ const AppContent = () => {
           <Route path="/weather" element={<Weather />} />
           <Route path="/yield" element={<Yield />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/setup" element={<Setup />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
