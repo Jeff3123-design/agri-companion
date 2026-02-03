@@ -12,6 +12,8 @@ import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { useEffect } from "react";
 import { initializeNotifications } from "@/lib/notifications";
 import { offlineStorage } from "@/lib/offline";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Calendar from "./pages/Calendar";
@@ -45,15 +47,73 @@ const AppContent = () => {
       <main className="flex-1">
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/progress" element={<Progress />} />
-          <Route path="/calendar" element={<Calendar />} />
           <Route path="/auth" element={<Auth />} />
-          <Route path="/pest-check" element={<PestCheck />} />
-          <Route path="/weather" element={<Weather />} />
-          <Route path="/yield" element={<Yield />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/setup" element={<Setup />} />
+
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/progress"
+            element={
+              <ProtectedRoute>
+                <Progress />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/calendar"
+            element={
+              <ProtectedRoute>
+                <Calendar />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pest-check"
+            element={
+              <ProtectedRoute>
+                <PestCheck />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/weather"
+            element={
+              <ProtectedRoute>
+                <Weather />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/yield"
+            element={
+              <ProtectedRoute>
+                <Yield />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/setup"
+            element={
+              <ProtectedRoute>
+                <Setup />
+              </ProtectedRoute>
+            }
+          />
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -69,7 +129,9 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <AppContent />
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>

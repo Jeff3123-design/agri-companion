@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Sprout, Loader2, MapPin, Ruler, Phone, User } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useAuth } from "@/contexts/AuthContext";
 
 const formSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters"),
@@ -20,51 +21,31 @@ const formSchema = z.object({
 
 const Setup = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const { user, profile } = useAuth();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      fullName: "",
-      farmLocation: "",
-      farmSize: "",
-      contactInfo: "",
+      fullName: profile?.full_name || "",
+      farmLocation: profile?.farm_location || "",
+      farmSize: profile?.farm_size || "",
+      contactInfo: profile?.contact_info || "",
     },
   });
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/auth");
-        return;
-      }
-      setUserId(session.user.id);
-
-      // Fetch existing profile data to pre-fill
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
-
-      if (data) {
-        form.reset({
-          fullName: data.full_name || "",
-          farmLocation: data.farm_location || "",
-          farmSize: data.farm_size || "",
-          contactInfo: data.contact_info || "",
-        });
-      }
-      setLoading(false);
-    };
-
-    checkAuth();
-  }, [navigate, form]);
+    if (profile) {
+      form.reset({
+        fullName: profile.full_name || "",
+        farmLocation: profile.farm_location || "",
+        farmSize: profile.farm_size || "",
+        contactInfo: profile.contact_info || "",
+      });
+    }
+  }, [profile, form]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    if (!userId) return;
+    if (!user) return;
 
     try {
       const { error } = await supabase
@@ -75,24 +56,17 @@ const Setup = () => {
           farm_size: values.farmSize,
           contact_info: values.contactInfo,
         })
-        .eq("id", userId);
+        .eq("id", user.id);
 
       if (error) throw error;
 
       toast.success("Profile setup complete! Welcome to your dashboard.");
-      navigate("/dashboard");
+      // Force reload to update AuthContext and ensure ProtectedRoute sees updated profile
+      window.location.href = "/dashboard";
     } catch (error: any) {
       toast.error(error.message || "Failed to update profile");
     }
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-primary/5 to-background p-4 animate-in fade-in duration-500">
