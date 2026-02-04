@@ -190,7 +190,7 @@ export const CropPhotoGallery = ({ userId, sessionId, currentDay }: CropPhotoGal
                     className="w-full h-full object-cover transition-transform group-hover:scale-105"
                   />
                 </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent rounded-lg opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                   <div className="absolute bottom-0 left-0 right-0 p-2">
                     <div className="flex items-center justify-between text-white text-xs">
                       <div className="flex items-center gap-1">
@@ -208,8 +208,9 @@ export const CropPhotoGallery = ({ userId, sessionId, currentDay }: CropPhotoGal
                   <Button
                     variant="destructive"
                     size="icon"
-                    className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                     onClick={() => deleteMutation.mutate(photo)}
+                    aria-label="Delete photo"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
