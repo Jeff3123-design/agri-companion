@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProfileAvatar } from "@/components/ProfileAvatar";
 import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 
 export const Navigation = () => {
   const { session, profile } = useAuth();
@@ -30,12 +31,15 @@ export const Navigation = () => {
         <div className="flex justify-between items-center py-3">
 
           {/* Mobile Hamburger */}
-          <button 
-            onClick={() => setIsOpen(true)} 
-            className="md:hidden p-2 rounded-lg hover:bg-muted transition"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden [&_svg]:size-6"
+            onClick={() => setIsOpen(true)}
+            aria-label="Open menu"
           >
-            <Menu className="w-6 h-6" />
-          </button>
+            <Menu />
+          </Button>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex gap-6">
@@ -93,12 +97,15 @@ export const Navigation = () => {
         {/* Close Button */}
         <div className="flex items-center justify-between py-4 px-4 border-b border-border">
           <h2 className="text-lg font-semibold">Menu</h2>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
+            className="[&_svg]:size-6"
             onClick={() => setIsOpen(false)}
-            className="p-2 rounded-lg hover:bg-muted"
+            aria-label="Close menu"
           >
-            <X className="w-6 h-6" />
-          </button>
+            <X />
+          </Button>
         </div>
 
         {/* Menu Items (animated) */}
