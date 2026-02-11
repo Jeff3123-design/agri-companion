@@ -132,6 +132,43 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Batch fetch profiles for all users in sessions
+    const userIds = [...new Set(sessions.map(s => s.user_id))];
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, latitude, longitude, full_name")
+      .in("id", userIds);
+
+    if (profilesError) {
+      console.error("Error fetching profiles:", profilesError);
+      throw profilesError;
+    }
+
+    const profilesMap = new Map(profiles?.map(p => [p.id, p]));
+
+    // Batch fetch existing daily_gdu records for today
+    const sessionIds = sessions.map(s => s.id);
+    const { data: existingGduRecords, error: existingGduError } = await supabase
+      .from("daily_gdu")
+      .select("session_id")
+      .in("session_id", sessionIds)
+      .eq("date", today);
+
+    if (existingGduError) {
+      console.error("Error fetching existing GDU records:", existingGduError);
+      throw existingGduError;
+    }
+
+    const existingGduSet = new Set(existingGduRecords?.map(r => r.session_id));
+
+    // Cache for weather results to avoid redundant API calls for the same location
+    const weatherCache = new Map<string, { tempMax: number; tempMin: number } | null>();
+
+    // Array to collect GDU records for bulk insertion
+    const gduInserts: any[] = [];
+    // Array to collect results that need session updates and notifications
+    const resultsToProcess: any[] = [];
     
     let processedCount = 0;
     let skippedCount = 0;
@@ -139,48 +176,33 @@ Deno.serve(async (req) => {
     
     for (const session of sessions) {
       try {
-        // Get user profile with location and email
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("latitude, longitude, full_name")
-          .eq("id", session.user_id)
-          .single();
+        // Get user profile from pre-fetched map
+        const profile = profilesMap.get(session.user_id);
         
-        if (profileError || !profile?.latitude || !profile?.longitude) {
+        if (!profile?.latitude || !profile?.longitude) {
           console.log(`Skipping session ${session.id}: No location data for user ${session.user_id}`);
           skippedCount++;
           continue;
         }
         
-        // Get user email from auth
-        const { data: authUser } = await supabase.auth.admin.getUserById(session.user_id);
-        const userEmail = authUser?.user?.email;
-        
-        // Check if we already have today's GDU for this session
-        const { data: existingGdu, error: existingError } = await supabase
-          .from("daily_gdu")
-          .select("id")
-          .eq("session_id", session.id)
-          .eq("date", today)
-          .maybeSingle();
-        
-        if (existingError) {
-          console.error(`Error checking existing GDU for session ${session.id}:`, existingError);
-          errorCount++;
-          continue;
-        }
-        
-        if (existingGdu) {
+        // Check if we already have today's GDU for this session using pre-fetched data
+        if (existingGduSet.has(session.id)) {
           console.log(`Session ${session.id} already has GDU for today`);
           skippedCount++;
           continue;
         }
         
-        // Fetch temperature from weather API
-        const tempData = await fetchTemperatureForLocation(
-          Number(profile.latitude),
-          Number(profile.longitude)
-        );
+        // Fetch temperature from weather API with caching
+        const locationKey = `${Number(profile.latitude).toFixed(4)},${Number(profile.longitude).toFixed(4)}`;
+        let tempData = weatherCache.get(locationKey);
+
+        if (tempData === undefined) {
+          tempData = await fetchTemperatureForLocation(
+            Number(profile.latitude),
+            Number(profile.longitude)
+          );
+          weatherCache.set(locationKey, tempData);
+        }
         
         if (!tempData) {
           console.log(`Could not fetch temperature for session ${session.id}`);
@@ -191,40 +213,55 @@ Deno.serve(async (req) => {
         // Calculate GDU
         const gdu = calculateDailyGDU(tempData.tempMax, tempData.tempMin);
         
-        // Insert daily GDU record
-        const { error: insertError } = await supabase
-          .from("daily_gdu")
-          .insert({
-            session_id: session.id,
-            user_id: session.user_id,
-            date: today,
-            temp_max: tempData.tempMax,
-            temp_min: tempData.tempMin,
-            gdu: gdu,
-            source: "cron",
-          });
+        // Collect daily GDU record for bulk insertion
+        gduInserts.push({
+          session_id: session.id,
+          user_id: session.user_id,
+          date: today,
+          temp_max: tempData.tempMax,
+          temp_min: tempData.tempMin,
+          gdu: gdu,
+          source: "cron",
+        });
         
-        if (insertError) {
-          console.error(`Error inserting GDU for session ${session.id}:`, insertError);
-          errorCount++;
-          continue;
-        }
+        // Calculate new accumulated GDU in-memory to avoid N+1 query
+        const totalGdu = Number(session.accumulated_gdu || 0) + gdu;
+        const newStage = getGrowthStage(totalGdu);
         
-        // Calculate new accumulated GDU
-        const { data: allGduRecords, error: gduRecordsError } = await supabase
-          .from("daily_gdu")
-          .select("gdu")
-          .eq("session_id", session.id);
-        
-        if (gduRecordsError) {
-          console.error(`Error fetching GDU records for session ${session.id}:`, gduRecordsError);
-        } else {
-          const totalGdu = (allGduRecords || []).reduce((sum, r) => sum + Number(r.gdu), 0);
-          const newStage = getGrowthStage(totalGdu);
-          const previousStage = session.current_stage;
-          
+        // Store data for post-bulk-insert processing
+        resultsToProcess.push({
+          session,
+          profile,
+          gdu,
+          totalGdu,
+          newStage,
+        });
+      } catch (sessionError) {
+        console.error(`Error processing session ${session.id}:`, sessionError);
+        errorCount++;
+      }
+    }
+
+    // Perform bulk insertion of GDU records FIRST for data integrity
+    if (gduInserts.length > 0) {
+      console.log(`Performing bulk insert of ${gduInserts.length} GDU records`);
+      const { error: bulkInsertError } = await supabase
+        .from("daily_gdu")
+        .insert(gduInserts);
+
+      if (bulkInsertError) {
+        console.error("Error during bulk GDU insertion:", bulkInsertError);
+        throw new Error(`Bulk GDU insertion failed: ${bulkInsertError.message}`);
+      }
+
+      // Only if GDU records were successfully inserted, we update sessions and send notifications
+      for (const result of resultsToProcess) {
+        const { session, profile, gdu, totalGdu, newStage } = result;
+        const previousStage = session.current_stage;
+
+        try {
           // Update session with new accumulated GDU
-          await supabase
+          const { error: updateError } = await supabase
             .from("farming_sessions")
             .update({
               accumulated_gdu: totalGdu,
@@ -232,51 +269,60 @@ Deno.serve(async (req) => {
             })
             .eq("id", session.id);
           
+          if (updateError) {
+            console.error(`Error updating session ${session.id}:`, updateError);
+            errorCount++;
+            continue;
+          }
+
           console.log(`Session ${session.id}: Added GDU ${gdu.toFixed(1)}, Total: ${totalGdu.toFixed(1)}, Stage: ${newStage.stage}`);
           
           // Check if stage changed and send email notification
-          if (previousStage && previousStage !== newStage.stage && userEmail) {
-            console.log(`Stage changed from ${previousStage} to ${newStage.stage} - sending email to ${userEmail}`);
-            
-            const nextStage = getNextStage(totalGdu);
-            
-            try {
-              const notificationResponse = await fetch(`${supabaseUrl}/functions/v1/send-notifications`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${supabaseServiceKey}`,
-                },
-                body: JSON.stringify({
-                  type: "growth_stage",
-                  email: userEmail,
-                  userName: profile.full_name || "Farmer",
-                  data: {
-                    stage: newStage.stage,
-                    stageName: newStage.name,
-                    stageDescription: newStage.description,
-                    accumulatedGdu: totalGdu,
-                    nextStage: nextStage?.stage,
-                    nextStageGdu: nextStage?.minGdu,
-                  },
-                }),
-              });
+          if (previousStage && previousStage !== newStage.stage) {
+            // Defer fetching user email until absolutely needed
+            const { data: authUser } = await supabase.auth.admin.getUserById(session.user_id);
+            const userEmail = authUser?.user?.email;
+
+            if (userEmail) {
+              console.log(`Stage changed from ${previousStage} to ${newStage.stage} - sending email to ${userEmail}`);
               
-              if (notificationResponse.ok) {
-                console.log(`Growth stage email sent successfully for session ${session.id}`);
-              } else {
-                console.error(`Failed to send growth stage email: ${notificationResponse.status}`);
+              const nextStage = getNextStage(totalGdu);
+
+              try {
+                const notificationResponse = await fetch(`${supabaseUrl}/functions/v1/send-notifications`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${supabaseServiceKey}`,
+                  },
+                  body: JSON.stringify({
+                    type: "growth_stage",
+                    email: userEmail,
+                    userName: profile.full_name || "Farmer",
+                    data: {
+                      stage: newStage.stage,
+                      stageName: newStage.name,
+                      stageDescription: newStage.description,
+                      accumulatedGdu: totalGdu,
+                      nextStage: nextStage?.stage,
+                      nextStageGdu: nextStage?.minGdu,
+                    },
+                  }),
+                });
+
+                if (!notificationResponse.ok) {
+                  console.error(`Failed to send growth stage email: ${notificationResponse.status}`);
+                }
+              } catch (emailError) {
+                console.error(`Error sending growth stage email:`, emailError);
               }
-            } catch (emailError) {
-              console.error(`Error sending growth stage email:`, emailError);
             }
           }
+          processedCount++;
+        } catch (updateErr) {
+          console.error(`Unexpected error processing session ${session.id} after bulk insert:`, updateErr);
+          errorCount++;
         }
-        
-        processedCount++;
-      } catch (sessionError) {
-        console.error(`Error processing session ${session.id}:`, sessionError);
-        errorCount++;
       }
     }
     
