@@ -52,42 +52,63 @@ const Settings = () => {
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+    const safetyTimeout = window.setTimeout(() => {
+      if (isMounted) setLoading(false);
+    }, 5000);
+
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/auth");
-        return;
-      }
-      setUserId(session.user.id);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          if (isMounted) setLoading(false);
+          navigate("/auth");
+          return;
+        }
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
+        if (isMounted) {
+          setUserId(session.user.id);
+          setLoading(false);
+        }
 
-      if (error) {
-        console.error("Error fetching profile:", error);
-      } else if (data) {
-        setProfile({
-          full_name: data.full_name || "",
-          farm_location: data.farm_location || "",
-          farm_size: data.farm_size || "",
-          contact_info: data.contact_info || "",
-        });
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error fetching profile:", error);
+          return;
+        }
+
+        if (data && isMounted) {
+          setProfile({
+            full_name: data.full_name || "",
+            farm_location: data.farm_location || "",
+            farm_size: data.farm_size || "",
+            contact_info: data.contact_info || "",
+          });
+        }
+      } catch (error) {
+        console.error("Auth/profile initialization failed:", error);
+        if (isMounted) setLoading(false);
       }
-      setLoading(false);
     };
 
     checkAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         navigate("/auth");
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      window.clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
