@@ -35,34 +35,30 @@ export const useGDUSession = (userId: string | undefined) => {
   const [isAutoFetching, setIsAutoFetching] = useState(false);
   const previousStageRef = useRef<string | null>(null);
 
-  // Get user location on mount and save to profile for cron job
+  // Get farm location from profile (not browser geolocation)
   useEffect(() => {
-    if (navigator.geolocation && userId) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          setLocation({ lat, lng });
-          
-          // Save location to profile for automatic daily GDU calculation
-          try {
-            await supabase
-              .from("profiles")
-              .update({
-                latitude: lat,
-                longitude: lng,
-              })
-              .eq("id", userId);
-            console.log("Location saved to profile for automatic GDU");
-          } catch (error) {
-            console.error("Failed to save location to profile:", error);
-          }
-        },
-        (error) => {
-          console.log("Location access denied:", error);
+    const fetchFarmLocation = async () => {
+      if (!userId) return;
+      
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("latitude, longitude")
+          .eq("id", userId)
+          .single();
+        
+        if (profile?.latitude && profile?.longitude) {
+          setLocation({ lat: Number(profile.latitude), lng: Number(profile.longitude) });
+          console.log("Using farm location for GDU calculations");
+        } else {
+          console.log("No farm location set in profile");
         }
-      );
-    }
+      } catch (error) {
+        console.error("Failed to fetch farm location:", error);
+      }
+    };
+    
+    fetchFarmLocation();
   }, [userId]);
 
   const sendGrowthStageNotification = async (stage: typeof GDU_STAGES[number], accumulatedGdu: number) => {

@@ -152,7 +152,6 @@ const Dashboard = () => {
             <GDUDashboard 
               session={gduSession} 
               dailyRecords={dailyRecords}
-              onAddGDU={addDailyGDU}
               onAutoFetchGDU={autoFetchTodayGDU}
               isAutoFetching={isAutoFetching}
               hasLocation={!!location}

@@ -1,13 +1,9 @@
-import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Thermometer, Leaf, Calendar, TrendingUp, Plus, History, Target, CloudSun, Loader2, BarChart3 } from "lucide-react";
+import { Leaf, Calendar, TrendingUp, History, Target, CloudSun, Loader2, BarChart3 } from "lucide-react";
 import { GDU_STAGES, getGrowthStage, getNextStage, getStageProgress, getDaysSincePlanting, getTasksForStage } from "@/lib/gdu";
 import { GDUSession, DailyGDURecord } from "@/hooks/useGDUSession";
 import { GDUChart } from "@/components/GDUChart";
@@ -17,7 +13,6 @@ import { format } from "date-fns";
 interface GDUDashboardProps {
   session: GDUSession;
   dailyRecords: DailyGDURecord[];
-  onAddGDU: (date: Date, tempMax: number, tempMin: number) => Promise<any>;
   onAutoFetchGDU?: () => Promise<any>;
   isAutoFetching?: boolean;
   hasLocation?: boolean;
@@ -26,16 +21,10 @@ interface GDUDashboardProps {
 export const GDUDashboard = ({ 
   session, 
   dailyRecords, 
-  onAddGDU, 
   onAutoFetchGDU,
   isAutoFetching = false,
   hasLocation = false,
 }: GDUDashboardProps) => {
-  const [tempMax, setTempMax] = useState("");
-  const [tempMin, setTempMin] = useState("");
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentStage = getGrowthStage(session.accumulated_gdu);
   const nextStage = getNextStage(session.accumulated_gdu);
@@ -43,15 +32,8 @@ export const GDUDashboard = ({
   const daysSincePlanting = session.planting_date ? getDaysSincePlanting(session.planting_date) : 0;
   const tasks = getTasksForStage(currentStage.stage);
 
-  const handleSubmit = async () => {
-    if (!tempMax || !tempMin) return;
-    setIsSubmitting(true);
-    await onAddGDU(new Date(selectedDate), parseFloat(tempMax), parseFloat(tempMin));
-    setTempMax("");
-    setTempMin("");
-    setIsDialogOpen(false);
-    setIsSubmitting(false);
-  };
+
+
 
   const gduToNextStage = nextStage ? nextStage.minGdu - session.accumulated_gdu : 0;
 
@@ -133,83 +115,21 @@ export const GDUDashboard = ({
               </CardTitle>
               <CardDescription>{currentStage.description}</CardDescription>
             </div>
-            <div className="flex gap-2">
-              {/* Auto-fetch from weather API */}
-              {onAutoFetchGDU && hasLocation && (
-                <Button 
-                  variant="outline" 
-                  onClick={onAutoFetchGDU}
-                  disabled={isAutoFetching || hasTodayData}
-                >
-                  {isAutoFetching ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <CloudSun className="h-4 w-4 mr-2" />
-                  )}
-                  {hasTodayData ? "Today Recorded" : "Auto-Fetch Today"}
-                </Button>
-              )}
-              
-              {/* Manual entry */}
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Manual Entry
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <Thermometer className="h-5 w-5" />
-                      Record Daily Temperature
-                    </DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 pt-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="date">Date</Label>
-                      <Input
-                        id="date"
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        max={format(new Date(), "yyyy-MM-dd")}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="tempMax">Max Temp (°C)</Label>
-                        <Input
-                          id="tempMax"
-                          type="number"
-                          step="0.1"
-                          placeholder="e.g., 28"
-                          value={tempMax}
-                          onChange={(e) => setTempMax(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="tempMin">Min Temp (°C)</Label>
-                        <Input
-                          id="tempMin"
-                          type="number"
-                          step="0.1"
-                          placeholder="e.g., 15"
-                          value={tempMin}
-                          onChange={(e) => setTempMin(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      GDU = ((Max + Min) / 2) - 10°C base temp
-                    </p>
-                    <Button onClick={handleSubmit} className="w-full" disabled={isSubmitting || !tempMax || !tempMin}>
-                      {isSubmitting ? "Recording..." : "Record GDU"}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
+            {/* Auto-fetch from weather API */}
+            {onAutoFetchGDU && hasLocation && (
+              <Button 
+                variant="outline" 
+                onClick={onAutoFetchGDU}
+                disabled={isAutoFetching || hasTodayData}
+              >
+                {isAutoFetching ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <CloudSun className="h-4 w-4 mr-2" />
+                )}
+                {hasTodayData ? "Today Recorded" : "Auto-Fetch Today"}
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
