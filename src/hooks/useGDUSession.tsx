@@ -110,6 +110,7 @@ export const useGDUSession = (userId: string | undefined) => {
       return;
     }
 
+    setLoading(true);
     try {
       const { data: existingSession, error: fetchError } = await supabase
         .from("farming_sessions")

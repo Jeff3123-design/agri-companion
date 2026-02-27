@@ -96,8 +96,9 @@ const Dashboard = () => {
 
   if (!user || sessionLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 pt-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground text-sm">Loading your farm data...</p>
       </div>
     );
   }
