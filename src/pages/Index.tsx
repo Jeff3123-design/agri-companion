@@ -107,11 +107,11 @@ const features = [
                     <span className="text-sm text-muted-foreground">Theme</span>
                     <ThemeToggle />
                   </div>
-                  <Button onClick={() => navigate("/auth")} variant="outline" className="w-full">
-                    Sign In
+                  <Button onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")} variant="outline" className="w-full">
+                    {isAuthenticated ? "Dashboard" : "Sign In"}
                   </Button>
-                  <Button onClick={() => navigate("/auth")} className="w-full">
-                    Get Started
+                  <Button onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")} className="w-full">
+                    {isAuthenticated ? "Open App" : "Get Started"}
                   </Button>
                 </div>
               </SheetContent>
