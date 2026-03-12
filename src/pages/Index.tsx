@@ -10,47 +10,30 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 const Index = () => {
   const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
-    // Safety timeout - show landing page after 3s even if auth check hangs
-    const timeout = window.setTimeout(() => {
-      if (isMounted) setLoading(false);
-    }, 3000);
 
     const checkAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          navigate("/dashboard");
-        } else if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setIsAuthenticated(!!session);
       } catch (error) {
         console.error("Auth check failed:", error);
-        if (isMounted) setLoading(false);
       }
     };
+
     checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        navigate("/dashboard");
-      }
-      setIsAuthenticated(!!session);
+      if (isMounted) setIsAuthenticated(!!session);
     });
 
     return () => {
       isMounted = false;
-      window.clearTimeout(timeout);
       subscription.unsubscribe();
     };
-  }, [navigate]);
-
-  if (loading) {
-    return null;
-  }
+  }, []);
 
 const features = [
     {
