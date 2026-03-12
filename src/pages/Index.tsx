@@ -10,47 +10,30 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 const Index = () => {
   const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
-    // Safety timeout - show landing page after 3s even if auth check hangs
-    const timeout = window.setTimeout(() => {
-      if (isMounted) setLoading(false);
-    }, 3000);
 
     const checkAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          navigate("/dashboard");
-        } else if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setIsAuthenticated(!!session);
       } catch (error) {
         console.error("Auth check failed:", error);
-        if (isMounted) setLoading(false);
       }
     };
+
     checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        navigate("/dashboard");
-      }
-      setIsAuthenticated(!!session);
+      if (isMounted) setIsAuthenticated(!!session);
     });
 
     return () => {
       isMounted = false;
-      window.clearTimeout(timeout);
       subscription.unsubscribe();
     };
-  }, [navigate]);
-
-  if (loading) {
-    return null;
-  }
+  }, []);
 
 const features = [
     {
@@ -101,11 +84,15 @@ const features = [
             <div className="hidden sm:block">
               <ThemeToggle />
             </div>
-            <Button onClick={() => navigate("/auth")} variant="outline" className="hidden sm:inline-flex">
-              Sign In
+            <Button
+              onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")}
+              variant="outline"
+              className="hidden sm:inline-flex"
+            >
+              {isAuthenticated ? "Dashboard" : "Sign In"}
             </Button>
-            <Button onClick={() => navigate("/auth")} className="hidden sm:inline-flex">
-              Get Started
+            <Button onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")} className="hidden sm:inline-flex">
+              {isAuthenticated ? "Open App" : "Get Started"}
             </Button>
             {/* Mobile: Hamburger menu with theme toggle */}
             <Sheet>
@@ -120,11 +107,11 @@ const features = [
                     <span className="text-sm text-muted-foreground">Theme</span>
                     <ThemeToggle />
                   </div>
-                  <Button onClick={() => navigate("/auth")} variant="outline" className="w-full">
-                    Sign In
+                  <Button onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")} variant="outline" className="w-full">
+                    {isAuthenticated ? "Dashboard" : "Sign In"}
                   </Button>
-                  <Button onClick={() => navigate("/auth")} className="w-full">
-                    Get Started
+                  <Button onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")} className="w-full">
+                    {isAuthenticated ? "Open App" : "Get Started"}
                   </Button>
                 </div>
               </SheetContent>
@@ -143,11 +130,15 @@ const features = [
             Master maize farming with GDU-based growth tracking, smart reminders, and real-time weather insights for optimal yields.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" onClick={() => navigate("/auth")} className="text-lg">
-              Start Your Journey
+            <Button
+              size="lg"
+              onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")}
+              className="text-lg"
+            >
+              {isAuthenticated ? "Open Dashboard" : "Start Your Journey"}
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/auth")}>
-              Learn More
+            <Button size="lg" variant="outline" onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")}>
+              {isAuthenticated ? "Go to App" : "Learn More"}
             </Button>
           </div>
         </div>
@@ -194,10 +185,10 @@ const features = [
             <Button
               size="lg"
               variant="secondary"
-              onClick={() => navigate("/auth")}
+              onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")}
               className="text-lg"
             >
-              Get Started Free
+              {isAuthenticated ? "Open Dashboard" : "Get Started Free"}
             </Button>
           </CardContent>
         </Card>
