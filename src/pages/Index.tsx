@@ -84,11 +84,15 @@ const features = [
             <div className="hidden sm:block">
               <ThemeToggle />
             </div>
-            <Button onClick={() => navigate("/auth")} variant="outline" className="hidden sm:inline-flex">
-              Sign In
+            <Button
+              onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")}
+              variant="outline"
+              className="hidden sm:inline-flex"
+            >
+              {isAuthenticated ? "Dashboard" : "Sign In"}
             </Button>
-            <Button onClick={() => navigate("/auth")} className="hidden sm:inline-flex">
-              Get Started
+            <Button onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")} className="hidden sm:inline-flex">
+              {isAuthenticated ? "Open App" : "Get Started"}
             </Button>
             {/* Mobile: Hamburger menu with theme toggle */}
             <Sheet>
