@@ -72,6 +72,10 @@ const AppContent = () => {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setIsCheckingAuth(false);
+    }, 3000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(!!session);
       setIsCheckingAuth(false);
@@ -88,7 +92,10 @@ const AppContent = () => {
 
     loadSession();
 
-    return () => subscription.unsubscribe();
+    return () => {
+      window.clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
