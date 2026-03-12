@@ -185,10 +185,10 @@ const features = [
             <Button
               size="lg"
               variant="secondary"
-              onClick={() => navigate("/auth")}
+              onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")}
               className="text-lg"
             >
-              Get Started Free
+              {isAuthenticated ? "Open Dashboard" : "Get Started Free"}
             </Button>
           </CardContent>
         </Card>
