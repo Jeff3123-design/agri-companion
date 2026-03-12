@@ -130,11 +130,15 @@ const features = [
             Master maize farming with GDU-based growth tracking, smart reminders, and real-time weather insights for optimal yields.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" onClick={() => navigate("/auth")} className="text-lg">
-              Start Your Journey
+            <Button
+              size="lg"
+              onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")}
+              className="text-lg"
+            >
+              {isAuthenticated ? "Open Dashboard" : "Start Your Journey"}
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/auth")}>
-              Learn More
+            <Button size="lg" variant="outline" onClick={() => navigate(isAuthenticated ? "/dashboard" : "/auth")}>
+              {isAuthenticated ? "Go to App" : "Learn More"}
             </Button>
           </div>
         </div>
