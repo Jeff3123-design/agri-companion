@@ -320,6 +320,7 @@ export const analyzePestDisease = async (imageFile: File): Promise<PestDiseaseRe
 
   try {
     const response = await fetch(`${backendConfig.apiUrl}/pest-disease/analyze`, {
+
       method: 'POST',
       headers: {
         ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
