@@ -144,19 +144,35 @@ const Yield = () => {
       return;
     }
 
+    const payload = gatheredData ?? (() => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        return saved ? JSON.parse(saved) : null;
+      } catch {
+        return null;
+      }
+    })();
+
+    if (!payload) {
+      toast.error("No collected farm data found. Please gather data first.");
+      return;
+    }
+
     setFetchingFromBackend(true);
     try {
       const response = await fetch(`${backendConfig.apiUrl}/yield/predict`, {
-        method: 'GET',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
           ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
         },
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        throw new Error('Backend not ready or prediction not available yet');
+        const errorText = await response.text();
+        throw new Error(errorText || 'Backend not ready or prediction not available yet');
       }
 
       const result = await response.json();
