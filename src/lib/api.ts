@@ -323,6 +323,7 @@ export const analyzePestDisease = async (imageFile: File): Promise<PestDiseaseRe
 
       method: 'POST',
       headers: {
+        'ngrok-skip-browser-warning': 'true',
         ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
       },
       body: formData
