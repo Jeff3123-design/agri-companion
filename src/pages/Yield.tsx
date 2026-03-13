@@ -76,6 +76,87 @@ const MAIZE_VARIETIES = [
 const STORAGE_KEY = 'yield_gathered_data';
 const PREDICTION_STORAGE_KEY = 'yield_prediction';
 
+const COUNTY_ENCODING_MAP: Record<string, number> = {
+  kisii: 16,
+  nakuru: 27,
+  uasin_gishu: 45,
+  trans_nzoia: 42,
+  meru: 23,
+  nyeri: 31,
+  kakamega: 11,
+  bungoma: 9,
+  machakos: 17,
+  narok: 28,
+};
+
+const normalizeCountyKey = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .split(',')[0]
+    .replace(/\s+/g, '_');
+
+const encodeCounty = (county: string): number => {
+  const key = normalizeCountyKey(county);
+  if (COUNTY_ENCODING_MAP[key] !== undefined) return COUNTY_ENCODING_MAP[key];
+
+  const hash = key.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return (hash % 47) + 1;
+};
+
+const parseFarmSizeAcres = (value: string): number => {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+};
+
+const mapRainfallToMm = (value: string): number => {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('high')) return 1400;
+  if (normalized.includes('moderate')) return 850;
+  if (normalized.includes('low')) return 450;
+  return 700;
+};
+
+const buildYieldModelPayload = (data: GatheredData) => {
+  const countyEncoded = encodeCounty(data.farmInfo.farmLocation || "unknown");
+  const farmSizeAcres = parseFarmSizeAcres(data.farmInfo.farmSize);
+  const avgTemperatureC = Number(data.weatherData.temperature) || 25;
+  const rainfallMm = mapRainfallToMm(data.rainfallData.recentRainfall || "");
+  const humidityPct = Number(data.weatherData.humidity) || 60;
+  const soilPH = 6.5;
+  const soilNitrogenPct = 0.18;
+  const ndvi = Math.max(0, Math.min(1, (data.cropHealthProxy.healthScore || 50) / 100));
+  const accumulatedGdu = Number(data.sessionData.accumulatedGdu) || 0;
+
+  const rainfallTemp = rainfallMm * avgTemperatureC;
+  const fertilizerRainfall = soilNitrogenPct * rainfallMm;
+  const gduPerDay = accumulatedGdu / 120;
+  const soilQualityIndex = (soilPH / 7) * 0.3 + soilNitrogenPct * 2 * 0.7;
+  const highRainfall = rainfallMm > 1000 ? 1 : 0;
+  const highTemp = avgTemperatureC > 28 ? 1 : 0;
+  const goodSoil = soilPH >= 5.5 && soilPH <= 7.5 ? 1 : 0;
+
+  return {
+    County: countyEncoded,
+    FarmSize_acres: farmSizeAcres,
+    AvgTemperature_C: avgTemperatureC,
+    Rainfall_mm: rainfallMm,
+    Humidity_pct: humidityPct,
+    SoilPH: soilPH,
+    SoilNitrogen_pct: soilNitrogenPct,
+    NDVI: ndvi,
+    AccumulatedGDU: accumulatedGdu,
+    Rainfall_x_Temp: rainfallTemp,
+    Fertilizer_x_Rainfall: fertilizerRainfall,
+    GDU_per_Day: gduPerDay,
+    Soil_Quality_Index: soilQualityIndex,
+    High_Rainfall: highRainfall,
+    High_Temp: highTemp,
+    Good_Soil: goodSoil,
+    County_Encoded: countyEncoded,
+  };
+};
+
 const Yield = () => {
   // Load initial state from localStorage
   const [prediction, setPrediction] = useState<YieldPrediction | null>(() => {
@@ -160,6 +241,8 @@ const Yield = () => {
 
     setFetchingFromBackend(true);
     try {
+      const modelPayload = buildYieldModelPayload(payload);
+
       const response = await fetch(`${backendConfig.apiUrl}/yield/predict`, {
         method: 'POST',
         headers: {
@@ -167,7 +250,7 @@ const Yield = () => {
           'ngrok-skip-browser-warning': 'true',
           ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(modelPayload),
       });
 
       if (!response.ok) {
