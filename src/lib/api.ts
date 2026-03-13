@@ -320,8 +320,10 @@ export const analyzePestDisease = async (imageFile: File): Promise<PestDiseaseRe
 
   try {
     const response = await fetch(`${backendConfig.apiUrl}/pest-disease/analyze`, {
+
       method: 'POST',
       headers: {
+        'ngrok-skip-browser-warning': 'true',
         ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
       },
       body: formData
@@ -383,6 +385,7 @@ export const predictYield = async (data: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
         ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
       },
       body: JSON.stringify(data)
