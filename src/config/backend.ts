@@ -10,6 +10,6 @@
  */
 
 export const backendConfig = {
-  apiUrl: "http://192.8.0.25:8000", // Add your backend API URL here
+  apiUrl: "https://2bba-129-222-147-215.ngrok-free.app", // ngrok tunnel to local backend
   apiKey: "0ee907c39b7944f7b15135759250412", // Add your API key here (optional)
 };
