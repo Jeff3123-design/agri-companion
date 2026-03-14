@@ -239,6 +239,8 @@ const Yield = () => {
       return;
     }
 
+    const modelPayload = buildYieldModelPayload(payload as GatheredData);
+
     setFetchingFromBackend(true);
     try {
       const response = await fetch(`${backendConfig.apiUrl}/yield/predict`, {
@@ -248,7 +250,7 @@ const Yield = () => {
           'ngrok-skip-browser-warning': 'true',
           ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(modelPayload),
       });
 
       if (!response.ok) {
