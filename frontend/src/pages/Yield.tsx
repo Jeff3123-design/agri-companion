@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { TrendingUp, Loader2, BarChart3, Target, Sprout, Cloud, Bug, Sparkles, Download, RefreshCw, CheckCircle, Leaf, Droplets, MapPin, Calendar, Ruler, Info } from "lucide-react";
+import { TrendingUp, Loader2, BarChart3, Target, Sprout, Cloud, Bug, Sparkles, Download, RefreshCw, CheckCircle, Leaf, Droplets, MapPin, Calendar, Info } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";  // 👈 ADD THIS
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { predictYield, fetchWeather, fetch7DayForecast } from "@/lib/api";
-import { YieldPrediction } from "@/types/farm";
+import { fetchWeather, fetch7DayForecast } from "@/lib/api";
+import { predictYield } from "@/services/yieldApi";
+import { YieldPredictionResponse, GatheredData } from "@/types/yield";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,50 +17,6 @@ interface GatheringStep {
   label: string;
   icon: React.ElementType;
   status: 'pending' | 'loading' | 'done';
-}
-
-interface GatheredData {
-  farmInfo: {
-    farmSize: string;
-    farmLocation: string;
-    maizeVariety: string;
-  };
-  sessionData: {
-    currentDay: number;
-    accumulatedGdu: number;
-    currentStage: string;
-    plantingDate: string | null;
-  };
-  weatherData: {
-    temperature: number;
-    humidity: number;
-    condition: string;
-    location?: string;
-    coordinates: {
-      latitude: number;
-      longitude: number;
-    };
-  };
-  rainfallData: {
-    recentRainfall: string;
-    forecast7Day: Array<{
-      date: string;
-      condition: string;
-      tempMax: number;
-      tempMin: number;
-    }>;
-  };
-  pestData: {
-    overallStatus: string;
-    fawPresence: string;
-    recentChecks: number;
-  };
-  cropHealthProxy: {
-    ndviEstimate: string;
-    healthScore: number;
-    basedOn: string;
-  };
-  collectedAt: string;
 }
 
 const MAIZE_VARIETIES = [
@@ -78,12 +35,13 @@ const PREDICTION_STORAGE_KEY = 'yield_prediction';
 
 const Yield = () => {
   // Load initial state from localStorage
-  const [prediction, setPrediction] = useState<YieldPrediction | null>(() => {
+  const [prediction, setPrediction] = useState<YieldPredictionResponse | null>(() => {
     try {
       const saved = localStorage.getItem(PREDICTION_STORAGE_KEY);
       return saved ? JSON.parse(saved) : null;
     } catch { return null; }
   });
+  
   const [loading, setLoading] = useState(false);
   const [gatheredData, setGatheredData] = useState<GatheredData | null>(() => {
     try {
@@ -91,9 +49,11 @@ const Yield = () => {
       return saved ? JSON.parse(saved) : null;
     } catch { return null; }
   });
+  
   const [dataDownloaded, setDataDownloaded] = useState(() => {
     return !!localStorage.getItem(STORAGE_KEY);
   });
+  
   const [fetchingFromBackend, setFetchingFromBackend] = useState(false);
   const [maizeVariety, setMaizeVariety] = useState<string>(() => {
     try {
@@ -105,9 +65,12 @@ const Yield = () => {
     } catch {}
     return "";
   });
+  
+  const [soilPH, setSoilPH] = useState<string>("6.2");
   const [showVarietyPrompt, setShowVarietyPrompt] = useState(() => {
     return !localStorage.getItem(STORAGE_KEY);
   });
+  
   const [gatheringSteps, setGatheringSteps] = useState<GatheringStep[]>([
     { label: 'Fetching farm & profile data', icon: Sprout, status: 'pending' },
     { label: 'Getting weather & rainfall data', icon: Cloud, status: 'pending' },
@@ -115,7 +78,25 @@ const Yield = () => {
     { label: 'Calculating crop health (NDVI proxy)', icon: Leaf, status: 'pending' },
     { label: 'Saving data for prediction', icon: Download, status: 'pending' },
   ]);
+  
   const [currentMessage, setCurrentMessage] = useState("Preparing your yield analysis...");
+
+  // Check backend connection on mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const response = await fetch(`${backendConfig.apiUrl}/health`);
+        if (response.ok) {
+          console.log("✅ Backend connected on port 8000");
+        } else {
+          console.warn("⚠️ Backend not responding on port 8000");
+        }
+      } catch (error) {
+        console.warn("⚠️ Backend not reachable on port 8000");
+      }
+    };
+    checkBackend();
+  }, []);
 
   const updateStepStatus = (index: number, status: 'pending' | 'loading' | 'done') => {
     setGatheringSteps(prev => prev.map((step, i) => 
@@ -140,32 +121,26 @@ const Yield = () => {
 
   const fetchPredictionFromBackend = async () => {
     if (!backendConfig.apiUrl) {
-      toast.error("Backend URL not configured. Go to Settings to configure.");
+      toast.error("Backend URL not configured.");
+      return;
+    }
+
+    if (!gatheredData) {
+      toast.error("No data available. Please gather data first.");
       return;
     }
 
     setFetchingFromBackend(true);
     try {
-      const response = await fetch(`${backendConfig.apiUrl}/yield/predict`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(backendConfig.apiKey && { 'Authorization': `Bearer ${backendConfig.apiKey}` })
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Backend not ready or prediction not available yet');
-      }
-
-      const result = await response.json();
+      // Use the imported predictYield function from yieldApi.ts
+      const result = await predictYield(gatheredData);
+      
       setPrediction(result);
-      // Save prediction to localStorage
       localStorage.setItem(PREDICTION_STORAGE_KEY, JSON.stringify(result));
-      toast.success("Prediction fetched from your backend!");
+      toast.success("Prediction received from backend!");
     } catch (error: any) {
       console.error("Backend fetch error:", error);
-      toast.error(error.message || "Could not fetch from backend. Make sure it's running.");
+      toast.error(error.message || "Could not fetch from backend. Make sure it's running on port 8000.");
     } finally {
       setFetchingFromBackend(false);
     }
@@ -218,6 +193,7 @@ const Yield = () => {
         farmSize: profile?.farm_size || "Not specified",
         farmLocation: profile?.farm_location || "Not specified",
         maizeVariety: MAIZE_VARIETIES.find(v => v.value === maizeVariety)?.label || maizeVariety,
+        soilPH: soilPH, // Include soil pH
       };
 
       const sessionData = {
@@ -295,7 +271,6 @@ const Yield = () => {
       updateStepStatus(2, 'loading');
       setCurrentMessage("Evaluating pest presence (Fall Armyworm)...");
       
-      // Check for recent pest checks in the system
       const { data: recentPhotos } = await supabase
         .from("crop_photos")
         .select("*")
@@ -305,7 +280,7 @@ const Yield = () => {
 
       const pestData = {
         overallStatus: recentPhotos && recentPhotos.length > 0 ? "Monitored" : "Unknown",
-        fawPresence: "Not detected", // Default - would come from AI pest analysis
+        fawPresence: "Not detected",
         recentChecks: recentPhotos?.length || 0
       };
       
@@ -316,8 +291,7 @@ const Yield = () => {
       updateStepStatus(3, 'loading');
       setCurrentMessage("Calculating crop health indicators...");
       
-      // NDVI proxy based on GDU accumulation, growth stage, and weather
-      const expectedGdu = sessionData.currentDay * 15; // Rough expected GDU per day
+      const expectedGdu = sessionData.currentDay * 15;
       const gduProgress = expectedGdu > 0 ? Math.min(sessionData.accumulatedGdu / expectedGdu, 1.2) : 0.5;
       const healthScore = Math.round(
         (gduProgress * 0.4 + 
@@ -349,17 +323,13 @@ const Yield = () => {
       };
 
       setGatheredData(collectedData);
-      
-      // Save to localStorage for persistence
       localStorage.setItem(STORAGE_KEY, JSON.stringify(collectedData));
-      
-      // Auto-download the data
       downloadDataAsJSON(collectedData);
       
       updateStepStatus(4, 'done');
       await new Promise(r => setTimeout(r, 300));
       
-      setCurrentMessage("Data saved! Now run your backend and fetch results.");
+      setCurrentMessage("Data saved! Now fetch prediction from backend.");
     } catch (error: any) {
       console.error("Data gathering error:", error);
       toast.error(error.message || "Failed to gather data");
@@ -367,8 +337,6 @@ const Yield = () => {
       setLoading(false);
     }
   };
-
-  // Don't auto-gather on mount, wait for variety selection
 
   if (loading) {
     return (
@@ -450,6 +418,12 @@ const Yield = () => {
           </p>
         </div>
 
+        {/* Backend Status Indicator */}
+        <div className="mb-4 text-xs text-muted-foreground flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-green-500"></div>
+          <span>Backend: http://localhost:8000</span>
+        </div>
+
         {/* Maize Variety Selection */}
         {showVarietyPrompt && !loading && !gatheredData && (
           <Card className="p-6 mb-6">
@@ -480,6 +454,24 @@ const Yield = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="soil-ph">Soil pH (optional)</Label>
+                <Input
+                  id="soil-ph"
+                  type="number"
+                  step="0.1"
+                  min="4.0"
+                  max="8.5"
+                  value={soilPH}
+                  onChange={(e) => setSoilPH(e.target.value)}
+                  className="mt-1"
+                  placeholder="6.2"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Typical range: 5.5-7.5. Default is 6.2
+                </p>
               </div>
 
               <Button 
@@ -518,7 +510,6 @@ const Yield = () => {
 
             {/* Enhanced Data Summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              {/* Farm Info */}
               <div className="bg-muted/50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <MapPin className="w-4 h-4 text-primary" />
@@ -528,10 +519,10 @@ const Yield = () => {
                   <li>• Size: {gatheredData.farmInfo.farmSize}</li>
                   <li>• Location: {gatheredData.farmInfo.farmLocation}</li>
                   <li>• Variety: {gatheredData.farmInfo.maizeVariety}</li>
+                  <li>• Soil pH: {gatheredData.farmInfo.soilPH || "6.2"}</li>
                 </ul>
               </div>
 
-              {/* Session Data */}
               <div className="bg-muted/50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="w-4 h-4 text-primary" />
@@ -545,7 +536,6 @@ const Yield = () => {
                 </ul>
               </div>
 
-              {/* Weather & Rainfall */}
               <div className="bg-muted/50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Droplets className="w-4 h-4 text-blue-500" />
@@ -559,7 +549,6 @@ const Yield = () => {
                 </ul>
               </div>
 
-              {/* Pest & Health */}
               <div className="bg-muted/50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Bug className="w-4 h-4 text-orange-500" />
@@ -573,7 +562,6 @@ const Yield = () => {
                 </ul>
               </div>
             </div>
-
 
             <div className="flex gap-3">
               <Button 
@@ -605,13 +593,13 @@ const Yield = () => {
             <Button 
               variant="ghost" 
               onClick={() => {
-                // Clear localStorage and reset state
                 localStorage.removeItem(STORAGE_KEY);
                 localStorage.removeItem(PREDICTION_STORAGE_KEY);
                 setShowVarietyPrompt(true);
                 setGatheredData(null);
                 setPrediction(null);
                 setMaizeVariety("");
+                setSoilPH("6.2");
                 setDataDownloaded(false);
               }} 
               className="w-full mt-3"
@@ -637,7 +625,6 @@ const Yield = () => {
 
         {prediction && (
           <>
-            {/* Main Prediction Card */}
             <Card className="p-8 mb-6 bg-gradient-farm border-none shadow-elevated">
               <div className="flex items-start justify-between mb-6">
                 <div>
@@ -646,10 +633,10 @@ const Yield = () => {
                     <span className="text-sm font-medium">Estimated Yield</span>
                   </div>
                   <div className="text-5xl font-bold text-primary-foreground mb-2">
-                    {prediction.estimatedYield.toLocaleString()}
+                    {prediction.estimatedYield} tons/ha
                   </div>
                   <p className="text-xl text-primary-foreground/90">
-                    {prediction.unit} per hectare
+                    Range: {prediction.yieldRange.min} - {prediction.yieldRange.max} tons/ha
                   </p>
                 </div>
                 <TrendingUp className="w-16 h-16 text-primary-foreground/50" />
@@ -663,100 +650,61 @@ const Yield = () => {
                   </span>
                 </div>
                 <Progress value={prediction.confidence} className="h-2" />
+                <p className="text-xs text-primary-foreground/60 mt-2">
+                  Model: {prediction.model_used}
+                </p>
               </div>
             </Card>
 
-            {/* Factors Analysis */}
             <Card className="p-6 mb-6">
               <h3 className="font-semibold text-lg mb-4 text-foreground">Contributing Factors</h3>
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-500/10 rounded-lg">
-                      <span className="text-2xl">☀️</span>
+                {prediction.factors.map((factor, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${
+                        factor.name === 'Rainfall' ? 'bg-blue-500/10' :
+                        factor.name === 'Temperature' ? 'bg-orange-500/10' :
+                        factor.name === 'Pest Pressure' ? 'bg-red-500/10' :
+                        factor.name === 'Crop Health' ? 'bg-green-500/10' :
+                        'bg-purple-500/10'
+                      }`}>
+                        {factor.name === 'Rainfall' && <Droplets className="w-5 h-5 text-blue-500" />}
+                        {factor.name === 'Temperature' && <Cloud className="w-5 h-5 text-orange-500" />}
+                        {factor.name === 'Pest Pressure' && <Bug className="w-5 h-5 text-red-500" />}
+                        {factor.name === 'Crop Health' && <Leaf className="w-5 h-5 text-green-500" />}
+                        {factor.name === 'Growing Degree Days' && <Calendar className="w-5 h-5 text-purple-500" />}
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{factor.name}</p>
+                        {factor.value && (
+                          <p className="text-xs text-muted-foreground">{factor.value}</p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-foreground">Weather Conditions</p>
-                      <p className="text-sm text-muted-foreground capitalize">
-                        {prediction.factors.weather}
-                      </p>
-                    </div>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    prediction.factors.weather === 'excellent' ? 'bg-primary/10 text-primary' :
-                    prediction.factors.weather === 'good' ? 'bg-green-500/10 text-green-600' :
-                    'bg-accent/10 text-accent'
-                  }`}>
-                    {prediction.factors.weather}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-green-500/10 rounded-lg">
-                      <span className="text-2xl">🌱</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">Soil Health</p>
-                      <p className="text-sm text-muted-foreground capitalize">
-                        {prediction.factors.soilHealth}
-                      </p>
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      factor.impact === 'positive' ? 'bg-green-500/10 text-green-600' :
+                      factor.impact === 'negative' ? 'bg-red-500/10 text-red-600' :
+                      'bg-yellow-500/10 text-yellow-600'
+                    }`}>
+                      {factor.score}/100
                     </div>
                   </div>
-                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    prediction.factors.soilHealth === 'excellent' ? 'bg-primary/10 text-primary' :
-                    prediction.factors.soilHealth === 'good' ? 'bg-green-500/10 text-green-600' :
-                    'bg-accent/10 text-accent'
-                  }`}>
-                    {prediction.factors.soilHealth}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-orange-500/10 rounded-lg">
-                      <span className="text-2xl">🐛</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">Pest Management</p>
-                      <p className="text-sm text-muted-foreground capitalize">
-                        {prediction.factors.pestManagement}
-                      </p>
-                    </div>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    prediction.factors.pestManagement === 'excellent' ? 'bg-primary/10 text-primary' :
-                    prediction.factors.pestManagement === 'good' ? 'bg-green-500/10 text-green-600' :
-                    'bg-accent/10 text-accent'
-                  }`}>
-                    {prediction.factors.pestManagement}
-                  </div>
-                </div>
+                ))}
               </div>
             </Card>
 
-            {/* Recommendations */}
             <Card className="p-6">
               <h3 className="font-semibold text-lg mb-4 text-foreground">
                 Recommendations to Maximize Yield
               </h3>
               <ul className="space-y-3">
-                <li className="flex items-start gap-3 text-muted-foreground">
-                  <span className="text-primary mt-1">✓</span>
-                  <span>Continue monitoring weather conditions and adjust irrigation accordingly</span>
-                </li>
-                <li className="flex items-start gap-3 text-muted-foreground">
-                  <span className="text-primary mt-1">✓</span>
-                  <span>Regular pest and disease scouting to prevent yield losses</span>
-                </li>
-                <li className="flex items-start gap-3 text-muted-foreground">
-                  <span className="text-primary mt-1">✓</span>
-                  <span>Ensure timely fertilizer application for optimal nutrition</span>
-                </li>
-                <li className="flex items-start gap-3 text-muted-foreground">
-                  <span className="text-primary mt-1">✓</span>
-                  <span>Plan harvest logistics based on predicted yield volume</span>
-                </li>
+                {prediction.recommendations.map((rec, index) => (
+                  <li key={index} className="flex items-start gap-3 text-muted-foreground">
+                    <span className="text-primary mt-1">✓</span>
+                    <span>{rec}</span>
+                  </li>
+                ))}
               </ul>
 
               <div className="flex gap-3 mt-6">
