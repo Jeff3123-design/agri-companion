@@ -6,10 +6,10 @@
  * Expected endpoints:
  * - POST /weather (body: { latitude, longitude })
  * - POST /pest-disease/analyze (body: FormData with image file)
- * - POST /yield/predict (body: { currentDay, weatherConditions, pestStatus })
+ * - POST /yield/predict (body: GatheredData object)
  */
 
 export const backendConfig = {
-  apiUrl: "http://192.8.0.25:8000", // Add your backend API URL here
-  apiKey: "0ee907c39b7944f7b15135759250412", // Add your API key here (optional)
+  apiUrl: "http://localhost:8000", // Change this to your actual backend URL (use localhost for dev, or ngrok URL for testing)
+  apiKey: "0ee907c39b7944f7b15135759250412", // Your API key
 };
