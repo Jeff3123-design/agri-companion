@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { TrendingUp, Loader2, BarChart3, Target, Sprout, Cloud, Bug, Sparkles, Download, RefreshCw, CheckCircle, Leaf, Droplets, MapPin, Calendar, Info } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";  // 👈 ADD THIS
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchWeather, fetch7DayForecast } from "@/lib/api";
 import { predictYield } from "@/services/yieldApi";
-import { YieldPredictionResponse, GatheredData } from "@/types/yield";
+import { YieldPredictionResponse, GatheredData培训机构 } from "@/types/yield";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
@@ -80,6 +80,7 @@ const Yield = () => {
   ]);
   
   const [currentMessage, setCurrentMessage] = useState("Preparing your yield analysis...");
+  const [user, setUser] = useState<any>(null);
 
   // Check backend connection on mount
   useEffect(() => {
@@ -95,7 +96,14 @@ const Yield = () => {
         console.warn("⚠️ Backend not reachable on port 8000");
       }
     };
+    
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    
     checkBackend();
+    getUser();
   }, []);
 
   const updateStepStatus = (index: number, status: 'pending' | 'loading' | 'done') => {
@@ -132,7 +140,6 @@ const Yield = () => {
 
     setFetchingFromBackend(true);
     try {
-      // Use the imported predictYield function from yieldApi.ts
       const result = await predictYield(gatheredData);
       
       setPrediction(result);
@@ -169,39 +176,61 @@ const Yield = () => {
       updateStepStatus(0, 'loading');
       setCurrentMessage("Checking your farm's growth progress...");
       
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Please log in to view predictions");
+      let farmInfo, sessionData;
+      
+      try {
+        if (!user) {
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          if (!currentUser) throw new Error("Please log in to view predictions");
+          setUser(currentUser);
+        }
 
-      const [sessionResult, profileResult] = await Promise.all([
-        supabase
-          .from("farming_sessions")
-          .select("*")
-          .eq("user_id", user.id)
-          .eq("status", "active")
-          .maybeSingle(),
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .maybeSingle()
-      ]);
+        const [sessionResult, profileResult] = await Promise.all([
+          supabase
+            .from("farming_sessions")
+            .select("*")
+            .eq("user_id", user?.id || "")
+            .eq("status", "active")
+            .maybeSingle(),
+          supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", user?.id || "")
+            .maybeSingle()
+        ]);
 
-      const session = sessionResult.data;
-      const profile = profileResult.data;
+        const session = sessionResult.data;
+        const profile = profileResult.data;
 
-      const farmInfo = {
-        farmSize: profile?.farm_size || "Not specified",
-        farmLocation: profile?.farm_location || "Not specified",
-        maizeVariety: MAIZE_VARIETIES.find(v => v.value === maizeVariety)?.label || maizeVariety,
-        soilPH: soilPH, // Include soil pH
-      };
+        farmInfo = {
+          farmSize: profile?.farm_size || "Not specified",
+          farmLocation: profile?.farm_location || "Not specified",
+          maizeVariety: MAIZE_VARIETIES.find(v => v.value === maizeVariety)?.label || maizeVariety,
+          soilPH: soilPH,
+        };
 
-      const sessionData = {
-        currentDay: session?.current_day || 1,
-        accumulatedGdu: Number(session?.accumulated_gdu) || 0,
-        currentStage: session?.current_stage || "VE",
-        plantingDate: session?.planting_date || null,
-      };
+        sessionData = {
+          currentDay: session?.current_day || 1,
+          accumulatedGdu: Number(session?.accumulated_gdu) || 0,
+          currentStage: session?.current_stage || "VE",
+          plantingDate: session?.planting_date || null,
+        };
+      } catch (error) {
+        console.log("Farm data fetch failed, using defaults:", error);
+        // Default values if Supabase fails
+        farmInfo = {
+          farmSize: "Not specified",
+          farmLocation: "Not specified",
+          maizeVariety: MAIZE_VARIETIES.find(v => v.value === maizeVariety)?.label || maizeVariety,
+          soilPH: soilPH,
+        };
+        sessionData = {
+          currentDay: 1,
+          accumulatedGdu: 0,
+          currentStage: "VE",
+          plantingDate: null,
+        };
+      }
       
       updateStepStatus(0, 'done');
       await new Promise(r => setTimeout(r, 400));
@@ -260,8 +289,9 @@ const Yield = () => {
             tempMin: d.tempMin
           }))
         };
-      } catch {
-        console.log("Using default weather conditions");
+      } catch (error) {
+        console.log("Using default weather conditions:", error);
+        // Keep default values
       }
       
       updateStepStatus(1, 'done');
@@ -271,18 +301,45 @@ const Yield = () => {
       updateStepStatus(2, 'loading');
       setCurrentMessage("Evaluating pest presence (Fall Armyworm)...");
       
-      const { data: recentPhotos } = await supabase
-        .from("crop_photos")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(5);
-
-      const pestData = {
-        overallStatus: recentPhotos && recentPhotos.length > 0 ? "Monitored" : "Unknown",
-        fawPresence: "Not detected",
-        recentChecks: recentPhotos?.length || 0
-      };
+      let pestData;
+      try {
+        // Add a timeout to prevent hanging
+        const pestPromise = supabase
+          .from("crop_photos")
+          .select("*")
+          .eq("user_id", user?.id || "")
+          .order("created_at", { ascending: false })
+          .limit(5);
+        
+        // Race the Supabase query against a timeout
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Pest data timeout")), 3000)
+        );
+        
+        const result = await Promise.race([pestPromise, timeoutPromise]);
+        
+        if (result && 'data' in result) {
+          const recentPhotos = result.data;
+          pestData = {
+            overallStatus: recentPhotos && recentPhotos.length > 0 ? "Monitored" : "Unknown",
+            fawPresence: "Not detected",
+            recentChecks: recentPhotos?.length || 0
+          };
+        } else {
+          pestData = {
+            overallStatus: "Unknown",
+            fawPresence: "Not detected",
+            recentChecks: 0
+          };
+        }
+      } catch (error) {
+        console.log("Pest data fetch failed, using defaults:", error);
+        pestData = {
+          overallStatus: "Unknown",
+          fawPresence: "Not detected",
+          recentChecks: 0
+        };
+      }
       
       updateStepStatus(2, 'done');
       await new Promise(r => setTimeout(r, 400));
@@ -330,9 +387,13 @@ const Yield = () => {
       await new Promise(r => setTimeout(r, 300));
       
       setCurrentMessage("Data saved! Now fetch prediction from backend.");
+      toast.success("Data gathering complete! Click 'Fetch Prediction from Backend' to get your yield estimate.");
     } catch (error: any) {
       console.error("Data gathering error:", error);
       toast.error(error.message || "Failed to gather data");
+      // Reset to allow trying again
+      setShowVarietyPrompt(true);
+      setGatheredData(null);
     } finally {
       setLoading(false);
     }
@@ -501,9 +562,9 @@ const Yield = () => {
                 <CheckCircle className="w-6 h-6 text-green-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-foreground">Data Collected & Downloaded!</h3>
+                <h3 className="font-semibold text-foreground">Data Collected Successfully!</h3>
                 <p className="text-sm text-muted-foreground">
-                  Your farm data has been saved to your Downloads folder.
+                  Your farm data has been saved. Click below to get your yield prediction.
                 </p>
               </div>
             </div>
@@ -568,25 +629,27 @@ const Yield = () => {
                 onClick={fetchPredictionFromBackend} 
                 disabled={fetchingFromBackend}
                 className="flex-1"
+                size="lg"
               >
                 {fetchingFromBackend ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Fetching...
+                    Fetching Prediction...
                   </>
                 ) : (
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Fetch Prediction from Backend
+                    Get Yield Prediction
                   </>
                 )}
               </Button>
               <Button 
                 variant="outline" 
                 onClick={() => gatheredData && downloadDataAsJSON(gatheredData)}
+                size="lg"
               >
                 <Download className="mr-2 h-4 w-4" />
-                Re-download
+                Download Data
               </Button>
             </div>
 
@@ -617,7 +680,7 @@ const Yield = () => {
             <p className="text-muted-foreground mb-4">
               Start by selecting your maize variety to gather farm data.
             </p>
-            <Button onClick={() => setShowVarietyPrompt(true)}>
+            <Button onClick={() => setShowVarietyPrompt(true)} size="lg">
               Select Variety
             </Button>
           </Card>
@@ -625,7 +688,7 @@ const Yield = () => {
 
         {prediction && (
           <>
-            <Card className="p-8 mb-6 bg-gradient-farm border-none shadow-elevated">
+            <Card className="p-8 mb-6 bg-gradient-to-br from-primary/90 to-primary border-none shadow-elevated">
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <div className="flex items-center gap-2 text-primary-foreground/80 mb-2">
@@ -649,7 +712,7 @@ const Yield = () => {
                     {prediction.confidence}%
                   </span>
                 </div>
-                <Progress value={prediction.confidence} className="h-2" />
+                <Progress value={prediction.confidence} className="h-2 bg-white/20" />
                 <p className="text-xs text-primary-foreground/60 mt-2">
                   Model: {prediction.model_used}
                 </p>
@@ -726,7 +789,7 @@ const Yield = () => {
                   ) : (
                     <Sparkles className="mr-2 h-4 w-4" />
                   )}
-                  Refresh from Backend
+                  Refresh Prediction
                 </Button>
               </div>
             </Card>
