@@ -482,7 +482,7 @@ const Yield = () => {
         {/* Backend Status Indicator */}
         <div className="mb-4 text-xs text-muted-foreground flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-green-500"></div>
-          <span>Backend: http://localhost:8000</span>
+          <span>hey there! a little patience ,, we gat you</span>
         </div>
 
         {/* Maize Variety Selection */}
@@ -531,7 +531,7 @@ const Yield = () => {
                   placeholder="6.2"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Typical range: 5.5-7.5. Default is 6.2
+                  
                 </p>
               </div>
 

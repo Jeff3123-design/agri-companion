@@ -9,11 +9,11 @@ export const Footer = () => {
             <div className="p-1.5 rounded-md bg-primary/10">
               <Sprout className="h-4 w-4 text-primary" />
             </div>
-            <span className="font-semibold text-foreground">FarmBuddy</span>
+            <span className="font-semibold text-foreground">FarmBuddy-AI</span>
           </div>
           <span className="hidden sm:inline">•</span>
           <p className="text-sm">
-            © {new Date().getFullYear()} FarmBuddy Software. All rights reserved.
+            © {new Date().getFullYear()} Kedu Softwares. All rights reserved.
           </p>
         </div>
       </div>
