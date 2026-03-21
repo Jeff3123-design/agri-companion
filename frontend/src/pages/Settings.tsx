@@ -244,10 +244,10 @@ const Settings = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Leaf className="h-5 w-5" />
-                  Farm Details
+                  Farm Data
                 </CardTitle>
                 <CardDescription>
-                  Update your farm information for personalized recommendations
+                  Update your farm data for personalized recommendations
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -287,7 +287,7 @@ const Settings = () => {
                     ) : (
                       <>
                         <Save className="mr-2 h-4 w-4" />
-                        Save Farm Details
+                        Save Farm Data
                       </>
                     )}
                   </Button>
@@ -556,7 +556,7 @@ const Settings = () => {
 
             {/* App Info */}
             <div className="text-center text-sm text-muted-foreground">
-              <p>Farm Buddy AI v2.0</p>
+              <p>Farm Buddy AI v3.0</p>
               <p className="mt-1">GDU-Based Growth Tracking</p>
             </div>
           </TabsContent>
