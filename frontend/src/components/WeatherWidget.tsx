@@ -44,7 +44,7 @@ export const WeatherWidget = () => {
       setWeather(data);
     } catch (error) {
       console.error("Weather fetch error:", error);
-      toast.error("Failed to load weather data. Please check your backend configuration.");
+      toast.error("Failed to load weather data. Please check your location settings.");
     } finally {
       setLoading(false);
     }
@@ -66,7 +66,7 @@ export const WeatherWidget = () => {
         <div className="text-center text-muted-foreground">
           <CloudSun className="w-12 h-12 mx-auto mb-2 opacity-50" />
           <p className="text-sm">Weather data will appear here</p>
-          <p className="text-xs mt-1">Configure backend in Settings</p>
+          <p className="text-xs mt-1">Check if location services are enabled</p>
         </div>
       </Card>
     );
