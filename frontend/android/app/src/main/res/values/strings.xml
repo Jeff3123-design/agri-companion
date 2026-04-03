@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FarmBuddy-AI</string>
+    <string name="title_activity_main">FarmBuddy-AI</string>
+    <string name="package_name">com.jefferson.farmbuddyai</string>
+    <string name="custom_url_scheme">com.jefferson.farmbuddyai</string>
+</resources>
